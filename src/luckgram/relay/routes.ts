@@ -106,6 +106,15 @@ export function getStartDelays(candidates: RouteCandidate[], hasPreferred: boole
   });
 }
 
+/**
+ * The transport to start on after upstream's probe of both (controller.ts `pingTransports`):
+ * HTTPS only when it answered and the WebSocket did not. With neither, the WebSocket — it keeps
+ * trying, through a relay where Telegram cannot be reached, while HTTPS has no relay to go through.
+ */
+export function chooseProbedTransport(probe: {websocket: boolean, https: boolean}): 'websocket' | 'https' {
+  return probe.websocket || !probe.https ? 'websocket' : 'https';
+}
+
 export function isRouteMode(value: any): value is RouteMode {
   return value === 'auto' || value === 'official' || value === 'relay';
 }

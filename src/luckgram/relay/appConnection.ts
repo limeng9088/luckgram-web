@@ -6,6 +6,7 @@
 
 import App from '@config/app';
 import rootScope from '@lib/rootScope';
+import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
 import {ConnectionStatus} from '@lib/mtproto/connectionStatus';
 import type {RoutePageOptions} from '@/luckgram/relay/page';
 
@@ -23,5 +24,9 @@ export const connection: RoutePageOptions = {
   },
   onConnectionChange: (callback) => {
     rootScope.addEventListener('connection_status_change', callback);
+  },
+  account: () => getCurrentAccount(),
+  onAccountChange: (callback) => {
+    rootScope.addEventListener('account_switched', callback);
   }
 };

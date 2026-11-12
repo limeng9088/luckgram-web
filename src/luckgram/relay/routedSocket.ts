@@ -7,12 +7,16 @@
  * attempt may start several sockets (routes.ts says which and when); the first to open is the
  * connection and the others are dropped. When none opens within ATTEMPT_TIMEOUT the attempt
  * closes, the page is told that nothing works, and the transport retries as it always does.
+ *
+ * A socket to a relay is created only when its turn has come (gate.ts): the time an attempt
+ * spends waiting for other connections' handshakes does not count against it.
  */
 
 import EventListenerBase from '@helpers/eventListenerBase';
 import ctx from '@environment/ctx';
 import {MTConnection, MTConnectionConstructable, MTConnectionEvents} from '@lib/mtproto/transports/transport';
 import {ATTEMPT_TIMEOUT, RouteCandidate, RouteConfig, getRouteCandidates, getStartDelays} from '@/luckgram/relay/routes';
+import {GateTicket, RelayGate} from '@/luckgram/relay/gate';
 import {RouteMessage, RouteStatus, emptyRouteTraffic, getDefaultRouteConfig, openRouteChannel, sanitizeRouteConfig} from '@/luckgram/relay/state';
 
 const CONFIG_WAIT = 400;
@@ -22,6 +26,30 @@ let status: RouteStatus = {mode: config.mode};
 let channel: BroadcastChannel;
 let configReady: Promise<void>;
 const live = new Set<{forceClose: () => void}>();
+/** One handshake at a time per relay, for the whole context (gate.ts). */
+let gate = new RelayGate();
+/** The accounts on screen in the tabs: their connections take their turn at a relay before the others'. */
+const activeAccounts = new Set<number>();
+
+/**
+ * Who goes first at a relay (lower first). The page starts connections for every account slot,
+ * signed in or not, and each keeps renewing its keys over connections of its own; when a handshake
+ * takes seconds, the account the user is looking at must not wait behind the idle ones.
+ *   0  the transport probe, and messages of an account on screen
+ *   1  files of an account on screen
+ *   2  messages of the other accounts          3  their files
+ */
+export function getGatePriority(account: number | undefined, isMedia: boolean, active: Set<number> = activeAccounts) {
+  const onScreen = account === undefined || !active.size || active.has(account);
+  return (onScreen ? 0 : 2) + (isMedia ? 1 : 0);
+}
+
+/** For tests: forgets what connected, what failed and who is on screen. */
+export function resetRouteState(accounts: number[] = []) {
+  gate = new RelayGate();
+  activeAccounts.clear();
+  accounts.forEach((account) => activeAccounts.add(account));
+}
 
 const traffic = emptyRouteTraffic();
 let trafficTimer: number;
@@ -65,6 +93,7 @@ function init() {
       const message = event.data as RouteMessage;
       if(message?.type === 'config') {
         clearTimeout(timeout);
+        if(typeof(message.account) === 'number') activeAccounts.add(message.account);
         applyRouteConfig(message.config);
         resolve();
       } else if(message?.type === 'retry') {
@@ -80,11 +109,15 @@ function init() {
   return configReady;
 }
 
-export function makeRoutedConnection(Connection: MTConnectionConstructable): MTConnectionConstructable {
+export function makeRoutedConnection(Connection: MTConnectionConstructable, account?: number): MTConnectionConstructable {
   return class RoutedConnection extends EventListenerBase<MTConnectionEvents> implements MTConnection {
     private winner: MTConnection;
     private attempts = new Map<MTConnection, RouteCandidate>();
     private timers: number[] = [];
+    private tickets = new Map<RouteCandidate, GateTicket>();
+    private deadline: number;
+    private deadlineSince: number;
+    private budget = ATTEMPT_TIMEOUT;
     private closed = false;
     private opened = false;
     private isMain: boolean;
@@ -108,13 +141,20 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
       const delays = getStartDelays(candidates, hasPreferred);
       let next = 0, failed = 0;
 
-      const startNext = () => {
-        if(this.closed || this.opened || next >= candidates.length) return;
-        const candidate = candidates[next++];
+      // * a candidate that did not open: the next one need not wait for its turn; none left — nothing works
+      const onFailed = () => {
+        if(this.opened || this.closed) return;
+        if(++failed >= candidates.length) this.finish(true);
+        else startNext();
+      };
+
+      const connectTo = (candidate: RouteCandidate, ticket?: GateTicket) => {
         const connection = new Connection(this.dcId, candidate.url, this.logSuffix);
         this.attempts.set(connection, candidate);
+        this.syncDeadline();
 
         connection.addEventListener('open', () => {
+          ticket?.done(true);
           if(this.closed || this.opened) {
             connection.close();
             return;
@@ -122,12 +162,13 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
 
           this.opened = true;
           this.winner = connection;
-          this.counter = traffic[`${candidate.kind}${this.isMedia ? 'Media' : 'Client'}`];
-          ++this.counter.connections;
-          trafficChanged();
           this.clearTimers();
           this.attempts.forEach((_, other) => other !== connection && other.close());
           this.attempts.clear();
+          this.cancelTickets();
+          this.counter = traffic[`${candidate.kind}${this.isMedia ? 'Media' : 'Client'}`];
+          ++this.counter.connections;
+          trafficChanged();
 
           if(this.isMain) {
             config.preferred = candidate.id;
@@ -150,12 +191,37 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
             return;
           }
 
-          if(!this.attempts.delete(connection) || this.opened || this.closed) return;
-
-          // * this address does not work: the next one need not wait for its turn
-          if(++failed >= candidates.length) this.finish(true);
-          else startNext();
+          const pending = this.attempts.delete(connection);
+          // * closed by us (another candidate won, or the attempt is over) says nothing about the relay
+          if(pending && !this.opened && !this.closed) ticket?.done(false);
+          else ticket?.cancel();
+          if(pending) {
+            onFailed();
+            this.syncDeadline();
+          }
         });
+      };
+
+      const startNext = () => {
+        if(this.closed || this.opened || next >= candidates.length) return;
+        const candidate = candidates[next++];
+        if(candidate.kind !== 'relay') {
+          connectTo(candidate);
+          return;
+        }
+
+        // * created only when no other connection is in the middle of its handshake with this relay
+        let ran = false;
+        const ticket = gate.enter(candidate.id, getGatePriority(account, this.isMedia), (down, ticket) => {
+          ran = true;
+          this.tickets.delete(candidate);
+          if(this.closed || this.opened) ticket.cancel();
+          else if(down) onFailed();
+          else connectTo(candidate, ticket);
+        });
+
+        if(!ran) this.tickets.set(candidate, ticket);
+        this.syncDeadline();
       };
 
       delays.forEach((delay, index) => {
@@ -169,14 +235,44 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
         }, delay));
       });
 
-      this.timers.push(ctx.setTimeout(() => {
-        if(!this.opened) this.finish(true);
-      }, ATTEMPT_TIMEOUT));
+      this.syncDeadline();
+    }
+
+    /**
+     * The attempt's time: ATTEMPT_TIMEOUT in all, counted while a handshake of its own is under way
+     * (or nothing of it is waiting either). Waiting for a turn at a relay, with no socket of its own
+     * yet, stops the clock: that time is other connections' handshakes, not this one's.
+     */
+    private syncDeadline() {
+      if(this.opened || this.closed) return;
+      const waitingOnly = this.tickets.size > 0 && !this.attempts.size;
+
+      if(waitingOnly) {
+        if(this.deadline !== undefined) {
+          clearTimeout(this.deadline);
+          this.deadline = undefined;
+          this.budget -= Date.now() - this.deadlineSince;
+        }
+      } else if(this.deadline === undefined) {
+        this.deadlineSince = Date.now();
+        this.deadline = ctx.setTimeout(() => {
+          this.deadline = undefined;
+          if(!this.opened && !this.closed) this.finish(true);
+        }, Math.max(0, this.budget));
+      }
+    }
+
+    private cancelTickets() {
+      const tickets = [...this.tickets.values()];
+      this.tickets.clear();
+      tickets.forEach((ticket) => ticket.cancel());
     }
 
     private clearTimers() {
       this.timers.forEach((timer) => clearTimeout(timer));
       this.timers.length = 0;
+      clearTimeout(this.deadline);
+      this.deadline = undefined;
     }
 
     /** @param nothingWorked no address opened in this attempt */
@@ -188,6 +284,7 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
 
       const attempts = [...this.attempts.keys()];
       this.attempts.clear();
+      this.cancelTickets();
       attempts.forEach((connection) => connection.close());
 
       if(nothingWorked && this.isMain) {
