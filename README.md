@@ -28,7 +28,7 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
 - To keep those merges small, Luckgram's code lives in `src/luckgram/` and `scripts/luckgram/`. Upstream files
   only get the few lines that call into it: `vite.config.ts`, `src/index.ts`, `src/config/app.ts`,
   `src/lib/langPack.ts`, `src/lib/serviceWorker/cache.ts`, `src/lib/serviceWorker/push.ts`,
-  `src/lib/appManagers/apiUpdatesManager.ts`, `src/components/sidebarLeft/index.ts`,
+  `src/lib/appManagers/apiUpdatesManager.ts` (and its test `src/tests/changelogDelivery.test.ts`), `src/components/sidebarLeft/index.ts`,
   `src/components/sidebarLeft/tabs/settings.tsx`, `scripts/import-graph.mjs`. `public/` (upstream's last committed bundle and its
   static files) is left as upstream has it; Luckgram's icons and manifest are laid over it when the site is
   assembled.
