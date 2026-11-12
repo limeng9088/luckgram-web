@@ -5,6 +5,8 @@
 
 import {LUCKGRAM_IS_DEV} from '@/luckgram/config';
 import {watchForLuckgramUpdate} from '@/luckgram/update';
+import {initRoutePage} from '@/luckgram/relay/page';
+import {connection} from '@/luckgram/relay/appConnection';
 import './luckgram.scss';
 
 function mountDevBadge() {
@@ -18,4 +20,5 @@ function mountDevBadge() {
 export function initLuckgram() {
   if(LUCKGRAM_IS_DEV) mountDevBadge();
   watchForLuckgramUpdate();
+  initRoutePage(connection);
 }

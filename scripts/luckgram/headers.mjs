@@ -11,7 +11,15 @@
  */
 
 export const TELEGRAM_SOURCES = ['https://*.telegram.org', 'wss://*.telegram.org'];
-export const LUCKGRAM_SOURCES = ['https://*.luckgram.cc', 'wss://*.luckgram.cc'];
+// * the relays (ws.luckgram.cc, ws-dev.luckgram.cc) and the API are under luckgram.cc; the rest are the backup
+// * entrances for when luckgram.cc is blocked: the backup relay (W2) and the API's backup addresses (W3).
+// * A relay on any other domain has to be added here and the site deployed again (relay/README.md).
+export const LUCKGRAM_SOURCES = [
+  'https://*.luckgram.cc', 'wss://*.luckgram.cc',
+  'wss://lgws.cat158.com', 'https://lg.cat158.com', 'https://lg-dev.cat158.com'
+];
+// * Telegram's built-in payments hand the card to Stripe from the page, as the official web version does
+export const PAYMENT_SOURCES = ['https://api.stripe.com'];
 
 export function buildContentSecurityPolicy() {
   const directives = {
@@ -23,7 +31,7 @@ export function buildContentSecurityPolicy() {
     'img-src': ['\'self\'', 'data:', 'blob:'],
     'media-src': ['\'self\'', 'data:', 'blob:'],
     'font-src': ['\'self\'', 'data:'],
-    'connect-src': ['\'self\'', 'data:', 'blob:', ...TELEGRAM_SOURCES, ...LUCKGRAM_SOURCES],
+    'connect-src': ['\'self\'', 'data:', 'blob:', ...TELEGRAM_SOURCES, ...LUCKGRAM_SOURCES, ...PAYMENT_SOURCES],
     'frame-src': ['\'self\'', 'https:', 'blob:', 'data:'],
     'manifest-src': ['\'self\''],
     'form-action': ['\'none\''],

@@ -1,0 +1,29 @@
+# Luckgram Web relay (luckgram-specs#138, W2). Deployed by the project manager (the Web agent's
+# CI token is Pages-only):  cd relay && npx wrangler deploy --env dev | --env production
+name = "luckgram-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+# No request logs: a log line of a request would carry the client's address.
+[observability]
+enabled = false
+
+[env.dev]
+name = "luckgram-relay-dev"
+routes = [{ pattern = "ws-dev.luckgram.cc", custom_domain = true }]
+
+[[env.dev.analytics_engine_datasets]]
+binding = "STATS"
+dataset = "luckgram_relay_dev"
+
+[env.production]
+name = "luckgram-relay"
+routes = [
+  { pattern = "ws.luckgram.cc", custom_domain = true },
+  { pattern = "lgws.cat158.com", custom_domain = true }
+]
+
+[[env.production.analytics_engine_datasets]]
+binding = "STATS"
+dataset = "luckgram_relay"

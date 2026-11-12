@@ -6,6 +6,7 @@ import {TransportType, DcConfigurator} from '@lib/mtproto/dcConfigurator';
 import type HTTP from '@lib/mtproto/transports/http';
 import type TcpObfuscated from '@lib/mtproto/transports/tcpObfuscated';
 import MTTransport from '@lib/mtproto/transports/transport';
+import {LUCKGRAM_WEBSOCKET_PROBE_TIMEOUT} from '@/luckgram/relay/routes';
 
 export class MTTransportController extends EventListenerBase<{
   change: (opened: MTTransportController['opened']) => void,
@@ -53,7 +54,7 @@ export class MTTransportController extends EventListenerBase<{
     socket.setAutoReconnect(false);
     socket.connection.addEventListener('close', () => websocketPromise.resolve(false), {once: true});
     socket.connection.addEventListener('open', () => websocketPromise.resolve(true), {once: true});
-    setTimeout(() => {
+    const giveUpOnWebSocket = () => {
       if(websocketPromise.isFulfilled || websocketPromise.isRejected) {
         return;
       }
@@ -63,6 +64,16 @@ export class MTTransportController extends EventListenerBase<{
       }
 
       websocketPromise.resolve(false);
+    };
+
+    // * Luckgram: where Telegram's addresses cannot be reached, HTTPS does not answer either and the WebSocket
+    // * that will open is the relay's, which may take longer than the 2 s a direct one gets. With no HTTPS to
+    // * fall back to there is nothing to gain from giving up on it early (src/luckgram/relay).
+    setTimeout(() => {
+      httpPromise.then((isHttpAvailable) => {
+        if(isHttpAvailable) giveUpOnWebSocket();
+        else setTimeout(giveUpOnWebSocket, LUCKGRAM_WEBSOCKET_PROBE_TIMEOUT - timeout);
+      });
     }, timeout);
 
     const [isHttpAvailable, isWebSocketAvailable] = await Promise.all([httpPromise, websocketPromise]);

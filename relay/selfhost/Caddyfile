@@ -1,0 +1,38 @@
+# Luckgram Web relay on your own server (luckgram-specs#138, W2) — the same rules as the Worker
+# (relay/src/rules.js). Caddy gets the certificate by itself. Replace relay.example.com.
+#
+# Caddy writes no access log unless told to; keep it that way (no `log` directive): a log line
+# of a request would carry the client's address.
+
+relay.example.com {
+	@relay path_regexp relay ^/([1-5])(-1)?/(apiws|apiws_premium)$
+	@allowed header_regexp Origin ^https://(web\.luckgram\.cc|web-dev\.luckgram\.cc|lgweb\.cat158\.com|[a-z0-9-]+\.luckgram-web-dev\.pages\.dev|[a-z0-9-]+\.luckgram-web\.pages\.dev)$
+	@websocket header Upgrade websocket
+
+	handle @relay {
+		@notGet not method GET
+		respond @notGet 404
+
+		@forbidden not header_regexp Origin ^https://(web\.luckgram\.cc|web-dev\.luckgram\.cc|lgweb\.cat158\.com|[a-z0-9-]+\.luckgram-web-dev\.pages\.dev|[a-z0-9-]+\.luckgram-web\.pages\.dev)$
+		respond @forbidden 403
+
+		@plain not header Upgrade websocket
+		respond @plain 426
+
+		rewrite * /{re.relay.3}
+		reverse_proxy https://kws{re.relay.1}{re.relay.2}.web.telegram.org {
+			header_up Host {upstream_hostport}
+			header_up -Origin
+			header_up -X-Forwarded-For
+			header_up -X-Forwarded-Proto
+			header_up -X-Forwarded-Host
+			transport http {
+				dial_timeout 10s
+			}
+		}
+	}
+
+	handle {
+		respond 404
+	}
+}

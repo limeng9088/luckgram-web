@@ -97,6 +97,23 @@ function getCommit(env) {
   }
 }
 
+/**
+ * The relays built into a build (luckgram-specs#138, W2), used until remote config brings
+ * `web.relays` (W3): the channel's own relay first, then the backup one. LUCKGRAM_RELAYS replaces
+ * them (a local relay: `LUCKGRAM_RELAYS=ws://localhost:8787`).
+ */
+/** @type {Record<string, string[]>} */
+export const LUCKGRAM_RELAYS = {
+  prod: ['wss://ws.luckgram.cc', 'wss://lgws.cat158.com'],
+  dev: ['wss://ws-dev.luckgram.cc', 'wss://lgws.cat158.com'],
+  local: []
+};
+
+export function getLuckgramRelays(env = process.env) {
+  if(env.LUCKGRAM_RELAYS !== undefined) return env.LUCKGRAM_RELAYS.split(/[\s,]+/).filter(Boolean);
+  return LUCKGRAM_RELAYS[getLuckgramChannel(env)];
+}
+
 export function getLuckgramBuildInfo(env = process.env) {
   return {
     channel: getLuckgramChannel(env),
@@ -125,7 +142,8 @@ export default function luckgramPlugin() {
       const define = {
         'import.meta.env.VITE_LG_BUILD': JSON.stringify(info.build),
         'import.meta.env.VITE_LG_COMMIT': JSON.stringify(command === 'build' ? info.commit : ''),
-        'import.meta.env.VITE_LG_CHANNEL': JSON.stringify(info.channel)
+        'import.meta.env.VITE_LG_CHANNEL': JSON.stringify(info.channel),
+        'import.meta.env.VITE_LG_RELAYS': JSON.stringify(getLuckgramRelays().join(','))
       };
 
       const isTest = !!process.env.VITEST;
