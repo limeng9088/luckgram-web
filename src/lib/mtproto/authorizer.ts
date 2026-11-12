@@ -27,6 +27,7 @@ import {randomBytes} from '@helpers/random';
 import {MTAuthKey} from '@lib/mtproto/authKey';
 import safeAssign from '@helpers/object/safeAssign';
 import getTransportError from '@lib/mtproto/transports/getTransportError';
+import {chooseProbedTransport} from '@/luckgram/relay/routes';
 
 type AuthOptions = {
   dcId: number,
@@ -612,8 +613,11 @@ export class Authorizer {
     }
 
     if(this.getTransportTypePromise) return this.getTransportTypePromise;
-    return this.getTransportTypePromise = transportController.pingTransports().then(({websocket}) => {
-      this.transportType = websocket ? 'websocket' : 'https';
+    return this.getTransportTypePromise = transportController.pingTransports().then(({websocket, https}) => {
+      // * Luckgram: HTTPS only when it answered. With neither there (Telegram blocked, the relay slow to open)
+      // * the WebSocket is the one that will come — the rule the transport controller itself goes by
+      // * (`waitForWebSocket`); upstream took HTTPS here and kept it for good (luckgram-specs#146).
+      this.transportType = chooseProbedTransport({websocket, https});
       this.log('will use transport:', this.transportType);
     });
   };

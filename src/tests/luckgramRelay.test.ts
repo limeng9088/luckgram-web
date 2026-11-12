@@ -7,7 +7,8 @@ import {
   ATTEMPT_TIMEOUT, RouteConfig, getRouteCandidates, getStartDelays, normalizeRelays, parseOfficialUrl
 } from '@/luckgram/relay/routes';
 import {sanitizeRouteConfig} from '@/luckgram/relay/state';
-import {applyRouteConfig, getRouteTraffic, makeRoutedConnection} from '@/luckgram/relay/routedSocket';
+import {applyRouteConfig, getGatePriority, getRouteTraffic, makeRoutedConnection, resetRouteState} from '@/luckgram/relay/routedSocket';
+import {RELAY_DOWN_MS, RelayGate} from '@/luckgram/relay/gate';
 import {describeRouteTraffic, formatBytes} from '@/luckgram/relay/traffic';
 import {allowedOrigins, decide, isOriginAllowed, parseRelayPath} from '../../relay/src/rules.js';
 import {getLuckgramRelays} from '../../scripts/luckgram/vite-plugin.mjs';
@@ -123,33 +124,6 @@ describe('luckgram relay: the choice of a route', () => {
   });
 });
 
-describe('luckgram relay: the page\'s settings', () => {
-  beforeEach(() => localStorage.clear());
-
-  // * the module reads the settings as it loads: importing it must not throw (it once did, in a built bundle only)
-  test('the settings as stored, before and after the server has spoken', async() => {
-    const {readRouteConfig, initRoutePage, routeStatus} = await import('@/luckgram/relay/page');
-    expect(routeStatus().mode).toBe('auto');
-    expect(readRouteConfig()).toMatchObject({mode: 'auto', relayMedia: true});
-
-    localStorage.setItem('lg_route_mode', 'relay');
-    localStorage.setItem('lg_route_preferred', RELAY);
-    expect(readRouteConfig()).toMatchObject({mode: 'relay', preferred: RELAY});
-
-    let relays = [BACKUP], relayMedia = true;
-    initRoutePage({relays: () => relays, relayMedia: () => relayMedia});
-    expect(readRouteConfig().relays).toEqual([BACKUP]);
-    relayMedia = false;
-    expect(readRouteConfig().relayMedia).toBe(false);
-
-    // * nothing from the server: the build's list stays; a list set by hand wins over both
-    relays = undefined;
-    expect(readRouteConfig().relays).toEqual([]);
-    localStorage.setItem('lg_relays', 'ws.luckgram.cc');
-    expect(readRouteConfig().relays).toEqual([RELAY]);
-  });
-});
-
 describe('luckgram relay: the connection that tries the routes', () => {
   class FakeSocket extends EventListenerBase<MTConnectionEvents> implements MTConnection {
     public static all: FakeSocket[] = [];
@@ -192,6 +166,7 @@ describe('luckgram relay: the connection that tries the routes', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     FakeSocket.all = [];
+    resetRouteState();
     applyRouteConfig(config());
   });
 
@@ -329,10 +304,170 @@ describe('luckgram relay: the connection that tries the routes', () => {
     expect(describeRouteTraffic(after).split('\n').length).toBe(4);
   });
 
+  // ---- luckgram-specs#146: a browser makes WebSocket handshakes to one address one after another
+
+  test('one handshake at a time per relay: the others create their socket when their turn comes', async() => {
+    applyRouteConfig(config({mode: 'relay', relays: [RELAY]}));
+    const first = await connect();
+    const second = await connect();
+    const third = await connect();
+    expect(FakeSocket.all.length).toBe(1);
+
+    // * nothing times out while it waits for its turn, however long the handshakes ahead of it take
+    await vi.advanceTimersByTimeAsync(ATTEMPT_TIMEOUT - 2000);
+    FakeSocket.all[0].open();
+    expect(first.events).toEqual(['open']);
+    expect(FakeSocket.all.length).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(ATTEMPT_TIMEOUT - 1000);
+    expect(second.events).toEqual([]);
+    expect(third.events).toEqual([]);
+    FakeSocket.all[1].open();
+    expect(second.events).toEqual(['open']);
+
+    // * its own handshake gets the attempt's whole time, and no more
+    await vi.advanceTimersByTimeAsync(ATTEMPT_TIMEOUT - 100);
+    expect(third.events).toEqual([]);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(third.events).toEqual(['close']);
+  });
+
+  test('the account on screen goes before the idle ones, messages before files', async() => {
+    resetRouteState([1]);
+    applyRouteConfig(config({mode: 'relay', relays: [RELAY]}));
+    const RoutedOf = (account: number) => makeRoutedConnection(FakeSocket, account);
+    const order: string[] = [];
+    const start = async(name: string, account: number, url = OFFICIAL, suffix = '') => {
+      const connection = new (RoutedOf(account))(2, url, suffix);
+      connection.addEventListener('open', () => order.push(name));
+      await vi.advanceTimersByTimeAsync(1);
+      return connection;
+    };
+
+    await start('probe', undefined);
+    await vi.advanceTimersByTimeAsync(500);
+    await start('account 3', 3);
+    await start('account 2', 2);
+    await start('account 1 files', 1, MEDIA, '-D');
+    await start('account 1', 1);
+    await vi.advanceTimersByTimeAsync(500);
+
+    for(let i = 0; i < 5; ++i) {
+      FakeSocket.all[FakeSocket.all.length - 1].open();
+      await vi.advanceTimersByTimeAsync(1);
+    }
+
+    expect(order).toEqual(['probe', 'account 1', 'account 1 files', 'account 3', 'account 2']);
+    expect(getGatePriority(undefined, false, new Set([1]))).toBe(0);
+    expect(getGatePriority(2, true, new Set([1]))).toBe(3);
+    // * before any tab has said which account it shows, nobody is put behind
+    expect(getGatePriority(2, false, new Set())).toBe(0);
+  });
+
+  test('a relay that has just failed is not tried by those who waited for it', async() => {
+    applyRouteConfig(config({mode: 'relay', relays: [RELAY]}));
+    const first = await connect();
+    const second = await connect();
+    const third = await connect();
+    FakeSocket.all[0].close();
+    await vi.advanceTimersByTimeAsync(1);
+
+    // * each would otherwise have found out for itself, one timeout after another
+    expect(FakeSocket.all.length).toBe(1);
+    expect(first.events).toEqual(['close']);
+    expect(second.events).toEqual(['close']);
+    expect(third.events).toEqual(['close']);
+
+    // * and it is tried again once that time has passed
+    await vi.advanceTimersByTimeAsync(RELAY_DOWN_MS);
+    FakeSocket.all = [];
+    const later = await connect();
+    FakeSocket.all[0].open();
+    expect(later.events).toEqual(['open']);
+  });
+
+  test('a connection given up while it waits leaves the queue', async() => {
+    applyRouteConfig(config({mode: 'relay', relays: [RELAY]}));
+    await connect();
+    const second = await connect();
+    const third = await connect();
+    second.connection.close();
+    expect(second.events).toEqual(['close']);
+
+    FakeSocket.all[0].open();
+    expect(FakeSocket.all.length).toBe(2);
+    FakeSocket.all[1].open();
+    expect(third.events).toEqual(['open']);
+  });
+
+  test('the gate itself', () => {
+    let now = 1000;
+    const gate = new RelayGate(() => now);
+    const log: string[] = [];
+    const enter = (name: string, priority: number) => gate.enter('r', priority, (down) => log.push(name + (down ? ' down' : '')));
+
+    const a = enter('a', 0);
+    enter('b', 1);
+    const c = enter('c', 0);
+    const d = enter('d', 0);
+    expect(log).toEqual(['a']);
+
+    d.cancel();
+    a.done(true);
+    a.done(true);
+    expect(log).toEqual(['a', 'c']);
+    c.done(false);
+    expect(log).toEqual(['a', 'c', 'b down']);
+    expect(gate.isDown('r')).toBe(true);
+
+    enter('e', 0);
+    expect(log[log.length - 1]).toBe('e down');
+    now += RELAY_DOWN_MS;
+    const f = enter('f', 0);
+    expect(log[log.length - 1]).toBe('f');
+
+    // * given up in the middle of its handshake: the next one is let in, the relay is not blamed
+    enter('g', 0);
+    f.cancel();
+    expect(log[log.length - 1]).toBe('g');
+    expect(gate.isDown('r')).toBe(false);
+
+    // * another relay has a turn of its own
+    gate.enter('other', 0, () => log.push('other'));
+    expect(log[log.length - 1]).toBe('other');
+  });
+
   test('web.relay_media=false: a download goes to Telegram only', async() => {
     applyRouteConfig(config({relayMedia: false}));
     await connect(MEDIA, '-D');
     await vi.advanceTimersByTimeAsync(ATTEMPT_TIMEOUT - 1000);
     expect(FakeSocket.all.map((socket) => socket.url)).toEqual([MEDIA]);
+  });
+});
+
+describe('luckgram relay: the page\'s settings', () => {
+  beforeEach(() => localStorage.clear());
+
+  // * the module reads the settings as it loads: importing it must not throw (it once did, in a built bundle only)
+  test('the settings as stored, before and after the server has spoken', async() => {
+    const {readRouteConfig, initRoutePage, routeStatus} = await import('@/luckgram/relay/page');
+    expect(routeStatus().mode).toBe('auto');
+    expect(readRouteConfig()).toMatchObject({mode: 'auto', relayMedia: true});
+
+    localStorage.setItem('lg_route_mode', 'relay');
+    localStorage.setItem('lg_route_preferred', RELAY);
+    expect(readRouteConfig()).toMatchObject({mode: 'relay', preferred: RELAY});
+
+    let relays = [BACKUP], relayMedia = true;
+    initRoutePage({relays: () => relays, relayMedia: () => relayMedia});
+    expect(readRouteConfig().relays).toEqual([BACKUP]);
+    relayMedia = false;
+    expect(readRouteConfig().relayMedia).toBe(false);
+
+    // * nothing from the server: the build's list stays; a list set by hand wins over both
+    relays = undefined;
+    expect(readRouteConfig().relays).toEqual([]);
+    localStorage.setItem('lg_relays', 'ws.luckgram.cc');
+    expect(readRouteConfig().relays).toEqual([RELAY]);
   });
 });

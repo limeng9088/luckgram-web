@@ -30,7 +30,8 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   `src/lib/langPack.ts`, `src/lib/serviceWorker/cache.ts`, `src/lib/serviceWorker/push.ts`,
   `src/lib/appManagers/apiUpdatesManager.ts` (and its test `src/tests/changelogDelivery.test.ts`), `src/components/sidebarLeft/index.ts`,
   `src/components/sidebarLeft/tabs/settings.tsx`, `src/components/sidebarLeft/tabs/experimental.tsx`,
-  `src/lib/mtproto/dcConfigurator.ts`, `src/lib/mtproto/transports/controller.ts`, `scripts/import-graph.mjs`.
+  `src/lib/mtproto/dcConfigurator.ts`, `src/lib/mtproto/transports/controller.ts`, `src/lib/mtproto/authorizer.ts`,
+  `src/lib/appManagers/createManagers.ts`, `scripts/import-graph.mjs`.
   (`experimental.tsx` is back to upstream since W3 moved the connection mode to "Luckgram 功能".) `public/` (upstream's last committed bundle and its
   static files) is left as upstream has it; Luckgram's icons and manifest are laid over it when the site is
   assembled.

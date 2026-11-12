@@ -63,10 +63,11 @@ export {routeStatus};
 
 let channel: BroadcastChannel;
 let onRetry: () => void;
+let getAccount: () => number;
 let isConnected: () => Promise<boolean>;
 
 function sendConfig() {
-  channel?.postMessage({type: 'config', config: readRouteConfig()} satisfies RouteMessage);
+  channel?.postMessage({type: 'config', config: readRouteConfig(), account: getAccount?.()} satisfies RouteMessage);
 }
 
 export function setRouteMode(mode: RouteMode) {
@@ -133,12 +134,18 @@ export type RoutePageOptions = {
   /** remote config `web.relay_media` */
   relayMedia?: () => boolean | undefined,
   /** calls back whenever the remote config changes */
-  onRemoteChange?: (callback: () => void) => void
+  onRemoteChange?: (callback: () => void) => void,
+  /** the account on screen in this tab */
+  account?: () => number,
+  /** calls back when this tab shows another account */
+  onAccountChange?: (callback: () => void) => void
 };
 
 export function initRoutePage(options: RoutePageOptions = {}) {
   if(channel) return;
   onRetry = options.onRetry;
+  getAccount = options.account;
+  options.onAccountChange?.(() => sendConfig());
   isConnected = options.isConnected;
   remote = {relays: options.relays, relayMedia: options.relayMedia};
   // * a relay the server added or dropped is used from the next connection on, without a new build

@@ -107,7 +107,8 @@ export default function createManagers(
     networkerFactory: new NetworkerFactory,
     rootScope: new RootScope,
     authorizer: undefined as Authorizer,
-    dcConfigurator: new DcConfigurator,
+    // * Luckgram: the account's connections know whose they are, to go first when it is the one on screen (specs#146)
+    dcConfigurator: Object.assign(new DcConfigurator, {luckgramAccount: accountNumber}),
     timeManager: new TimeManager,
     appStoragesManager: appStoragesManager,
     appStateManager: stateManager,
