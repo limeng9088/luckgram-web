@@ -1,7 +1,8 @@
 import pause from '@helpers/schedulers/pause';
 
 const ctx = self as any as ServiceWorkerGlobalScope;
-export const CACHE_ASSETS_NAME = 'cachedAssets';
+// * Luckgram: a name of its own, not the official web version's 'cachedAssets'
+export const CACHE_ASSETS_NAME = 'luckgramAssets';
 
 function isCorrectResponse(response: Response) {
   return response.ok && response.status === 200;

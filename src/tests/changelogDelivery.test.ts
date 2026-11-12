@@ -47,7 +47,7 @@ describe('the version\'s message', () => {
 
     expect(manager.processLocalUpdate).toHaveBeenCalledTimes(1);
     const update = manager.processLocalUpdate.mock.calls[0][0];
-    expect(update.message.startsWith(`Telegram Web${App.suffix} обновлён до версии 9.9`)).toBe(true);
+    expect(update.message.startsWith(`Luckgram обновлён до версии 9.9`)).toBe(true);
     expect(update.type).toBe('local');
     expect(manager.appStateManager.pushToState).toHaveBeenCalledWith('version', '9.9');
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -59,7 +59,7 @@ describe('the version\'s message', () => {
     await manager.deliverChangelog();
 
     expect(manager.processLocalUpdate).toHaveBeenCalledTimes(1);
-    expect(manager.processLocalUpdate.mock.calls[0][0].message.startsWith(`Telegram Web${App.suffix} was updated to version 9.9`)).toBe(true);
+    expect(manager.processLocalUpdate.mock.calls[0][0].message.startsWith(`Luckgram was updated to version 9.9`)).toBe(true);
     expect(manager.appStateManager.pushToState).toHaveBeenCalledWith('version', '9.9');
   });
 

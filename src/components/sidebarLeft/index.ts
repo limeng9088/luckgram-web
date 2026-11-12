@@ -24,6 +24,7 @@ import appNavigationController, {NavigationItem} from '@components/appNavigation
 import findUpClassName from '@helpers/dom/findUpClassName';
 import findUpTag from '@helpers/dom/findUpTag';
 import App, {getAppVersionText} from '@config/app';
+import {LUCKGRAM_SOURCE_URL} from '@/luckgram/config';
 import Modes from '@config/modes';
 import ButtonMenuToggle from '@components/buttonMenuToggle';
 import sessionStorage from '@lib/sessionStorage';
@@ -2014,7 +2015,7 @@ export default appSidebarLeft;
 
 function getVersionLink() {
   const btnMenuFooter = document.createElement('a');
-  btnMenuFooter.href = 'https://github.com/morethanwords/tweb/blob/master/CHANGELOG.md';
+  btnMenuFooter.href = LUCKGRAM_SOURCE_URL; // * Luckgram: the source (GPL-3.0), not upstream's changelog
   setBlankToAnchor(btnMenuFooter);
   btnMenuFooter.classList.add('btn-menu-footer');
   btnMenuFooter.addEventListener(CLICK_EVENT_NAME, (e) => {

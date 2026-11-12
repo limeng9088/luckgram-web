@@ -1,0 +1,184 @@
+// Luckgram Web (luckgram-specs#137, W1): the name in the interface, the update check, the build's
+// credentials and the Content-Security-Policy of the deployed site.
+
+import {luckgramBrandString, luckgramBrandText} from '@/luckgram/brandStrings';
+import {getLuckgramVersionText} from '@/luckgram/config';
+import {followBrowserLanguage} from '@/luckgram/language';
+import {isNewerDeployment} from '@/luckgram/update';
+import {resolveLuckgramCredentials, luckgramHtmlContext} from '../../scripts/luckgram/vite-plugin.mjs';
+import {buildContentSecurityPolicy, buildHeadersFile} from '../../scripts/luckgram/headers.mjs';
+
+describe('luckgram: the product name', () => {
+  test('Telegram Web and WebK become Luckgram', () => {
+    expect(luckgramBrandText('This link is not supported on Telegram Web.')).toBe('This link is not supported on Luckgram.');
+    expect(luckgramBrandText('Telegram WebK 2.3 (687)')).toBe('Luckgram 2.3 (687)');
+    expect(luckgramBrandText('Telegram Web K was updated')).toBe('Luckgram was updated');
+    expect(luckgramBrandText('WebK has updated...')).toBe('Luckgram has updated...');
+    expect(luckgramBrandText('Telegram 网页版暂不支持此消息')).toBe('Luckgram 网页版暂不支持此消息');
+  });
+
+  test('Telegram itself stays: the service, the account, other words with Web', () => {
+    for(const text of [
+      'Sign in to Telegram',
+      'Scan with Telegram app on your phone',
+      'Telegram Premium',
+      'Open in Web Browser',
+      'WebP stickers',
+      'Active Web Sessions',
+      ''
+    ]) {
+      expect(luckgramBrandText(text)).toBe(text);
+    }
+  });
+
+  test('plain and pluralized language pack strings', () => {
+    const plain = {_: 'langPackString', key: 'a', value: 'Not supported on Telegram Web'};
+    expect(luckgramBrandString(plain)).toBe(plain);
+    expect(plain.value).toBe('Not supported on Luckgram');
+
+    const plural = {_: 'langPackStringPluralized', key: 'b', one_value: '%d Telegram Web tab', other_value: '%d Telegram Web tabs'};
+    luckgramBrandString(plural);
+    expect(plural.one_value).toBe('%d Luckgram tab');
+    expect(plural.other_value).toBe('%d Luckgram tabs');
+  });
+
+  test('the version line', () => {
+    expect(getLuckgramVersionText('2.3')).toMatch(/^Luckgram 2\.3 \(\d+\)/);
+    expect(getLuckgramVersionText('2.3')).not.toMatch(/Telegram|WebK/);
+  });
+
+  test('the page template', () => {
+    expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'prod'})).toMatchObject({title: 'Luckgram', origin: 'https://web.luckgram.cc/'});
+    expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'dev'}).origin).toBe('https://web-dev.luckgram.cc/');
+    expect(() => luckgramHtmlContext({LUCKGRAM_CHANNEL: 'staging'})).toThrow(/LUCKGRAM_CHANNEL/);
+  });
+});
+
+describe('luckgram: the update check', () => {
+  const own = 'a'.repeat(40);
+
+  test('another commit is a new version', () => {
+    expect(isNewerDeployment({commit: 'b'.repeat(40)}, own)).toBe(true);
+  });
+
+  test('the same commit, a broken file or a build without a commit is not', () => {
+    expect(isNewerDeployment({commit: own}, own)).toBe(false);
+    expect(isNewerDeployment(undefined, own)).toBe(false);
+    expect(isNewerDeployment({commit: ''}, own)).toBe(false);
+    expect(isNewerDeployment({} as any, own)).toBe(false);
+    expect(isNewerDeployment({commit: 'b'.repeat(40)}, '')).toBe(false);
+  });
+});
+
+describe('luckgram: the browser language', () => {
+  const setLanguages = (languages: string[]) => {
+    Object.defineProperty(navigator, 'languages', {value: languages, configurable: true});
+    Object.defineProperty(navigator, 'language', {value: languages[0], configurable: true});
+  };
+
+  // * the part of I18n the switch uses: `raced` is the sign-in page applying the stored pack meanwhile
+  const makeI18n = (options: {fail?: boolean, raced?: boolean} = {}) => {
+    let current = 'en', stored = 'en';
+    const i18n = {
+      getLangPackAndApply: vi.fn(async(langCode: string) => {
+        if(options.fail) throw new Error('offline');
+        stored = langCode;
+        if(!options.raced) current = langCode;
+      }),
+      getCacheLangPackAndApply: vi.fn(async() => {
+        current = stored;
+      }),
+      getLastRequestedLangCode: () => current
+    };
+    return i18n;
+  };
+
+  beforeEach(() => localStorage.clear());
+
+  test('a Chinese browser on the bundled English pack is switched to Chinese, once', async() => {
+    setLanguages(['zh-CN', 'en']);
+    const i18n = makeI18n();
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledWith('zh-hans-raw');
+    expect(i18n.getLastRequestedLangCode()).toBe('zh-hans-raw');
+    expect(i18n.getCacheLangPackAndApply).not.toHaveBeenCalled();
+
+    // * the user went back to English in Settings: it stays
+    expect(followBrowserLanguage({lang_code: 'en'}, i18n)).toBeUndefined();
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledTimes(1);
+  });
+
+  test('the pack is shown even when the sign-in page applied the stored one meanwhile', async() => {
+    setLanguages(['zh-CN']);
+    const i18n = makeI18n({raced: true});
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getCacheLangPackAndApply).toHaveBeenCalledTimes(1);
+    expect(i18n.getLastRequestedLangCode()).toBe('zh-hans-raw');
+    expect(localStorage.getItem('lg_lang_followed')).toBe('1');
+  });
+
+  test('a failed switch is tried again at the next start', async() => {
+    setLanguages(['zh-TW']);
+    const i18n = makeI18n({fail: true});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
+  });
+
+  test('any other browser stays in English, and a chosen language is kept', () => {
+    const i18n = makeI18n();
+    setLanguages(['en-US', 'zh-CN']);
+    expect(followBrowserLanguage({lang_code: 'en'}, i18n)).toBeUndefined();
+
+    localStorage.clear();
+    setLanguages(['zh-CN']);
+    expect(followBrowserLanguage({lang_code: 'ru'}, i18n)).toBeUndefined();
+    expect(i18n.getLangPackAndApply).not.toHaveBeenCalled();
+  });
+});
+
+describe('luckgram: the credentials of a build', () => {
+  const upstream = {id: '1025907', hash: 'f'.repeat(32)};
+  const hash = '0123456789abcdef0123456789abcdef';
+
+  test('taken from TG_API_ID / TG_API_HASH', () => {
+    expect(resolveLuckgramCredentials({TG_API_ID: ' 123456 ', TG_API_HASH: hash}, upstream)).toEqual({id: '123456', hash});
+  });
+
+  test('a build without them fails, it does not fall back to upstream\'s', () => {
+    expect(() => resolveLuckgramCredentials({}, upstream)).toThrow(/not set/);
+    expect(() => resolveLuckgramCredentials({TG_API_ID: '123456'}, upstream)).toThrow(/not set/);
+    expect(() => resolveLuckgramCredentials({TG_API_ID: 'abc', TG_API_HASH: hash}, upstream)).toThrow(/not a number/);
+    expect(() => resolveLuckgramCredentials({TG_API_ID: '123456', TG_API_HASH: 'short'}, upstream)).toThrow(/32 hex/);
+  });
+
+  test('upstream\'s own pair is refused', () => {
+    expect(() => resolveLuckgramCredentials({TG_API_ID: upstream.id, TG_API_HASH: hash}, upstream)).toThrow(/upstream/);
+    expect(() => resolveLuckgramCredentials({TG_API_ID: '123456', TG_API_HASH: upstream.hash.toUpperCase()}, upstream)).toThrow(/upstream/);
+  });
+});
+
+describe('luckgram: the headers of the deployed site', () => {
+  test('requests go to the site itself, Telegram and Luckgram only', () => {
+    const csp = buildContentSecurityPolicy();
+    const connect = /connect-src ([^;]+)/.exec(csp)[1].split(' ');
+    expect(connect).toEqual([
+      '\'self\'', 'data:', 'blob:',
+      'https://*.telegram.org', 'wss://*.telegram.org',
+      'https://*.luckgram.cc', 'wss://*.luckgram.cc'
+    ]);
+
+    expect(csp).toContain('default-src \'self\'');
+    expect(/script-src ([^;]+)/.exec(csp)[1]).not.toMatch(/https?:|\s'unsafe-eval'|unsafe-inline/);
+    expect(/img-src ([^;]+)/.exec(csp)[1]).not.toMatch(/https?:/);
+  });
+
+  test('only the production address may be indexed', () => {
+    expect(buildHeadersFile('dev')).toContain('X-Robots-Tag: noindex');
+    expect(buildHeadersFile('local')).toContain('X-Robots-Tag: noindex');
+    expect(buildHeadersFile('prod')).not.toContain('X-Robots-Tag');
+    expect(buildHeadersFile('prod')).toContain('/luckgram-version\n  Cache-Control: no-store');
+  });
+});

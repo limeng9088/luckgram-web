@@ -7,6 +7,7 @@
 
 import type {TrueDcId} from '@types';
 import {BASE_DC_ID} from '@lib/accounts/authKeyFingerprint';
+import {getLuckgramVersionText} from '@/luckgram/config';
 
 export const MAIN_DOMAINS = ['web.telegram.org', 'webk.telegram.org'];
 export const DEFAULT_BACKGROUND_SLUG = 'pattern';
@@ -33,9 +34,9 @@ const App = {
   interclientBroadcastChannel: 'tgweb'
 };
 
-// * "Telegram WebK 2.2 (681)" - how the app names itself, in the main menu and under Settings
+// * "Luckgram 2.3 (57) · 1a2b3c4" - how the app names itself, in the main menu and under Settings
 export function getAppVersionText() {
-  return `Telegram Web${App.suffix} ${App.version} (${App.build})`;
+  return getLuckgramVersionText(App.version);
 }
 
 if(App.isMainDomain) { // use Webogram credentials then

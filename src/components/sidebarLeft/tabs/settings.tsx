@@ -35,6 +35,7 @@ import {bumpRecentSettingsSearch} from '@lib/settingsSearch/recent';
 import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 import A11yButton from '@components/a11yButton';
 import {getAppVersionText} from '@config/app';
+import LuckgramSourceLink from '@/luckgram/sourceLink';
 import {getKeptFlags} from '@config/modes';
 import styles from '@components/sidebarLeft/tabs/settings.module.scss';
 import type {WalletStatus} from '@appManagers/appWalletManager';
@@ -520,6 +521,7 @@ const Settings = () => {
           <span class={styles.versionOn}>{i18n('Experimental.OnNotice')}</span>
         </Show>
       </A11yButton>
+      <LuckgramSourceLink />
     </>
   );
 };
