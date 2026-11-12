@@ -16,6 +16,7 @@ import settingsSearchPlugin from './scripts/settings-search-plugin.mjs';
 import watchTransformCache from './scripts/watch-transform-cache.mjs';
 import hotReloadPlugin from './scripts/hot-reload-plugin.mjs';
 import widgetSandboxPlugin, {widgetSandboxQuickjsPlugin} from './scripts/widget-sandbox-plugin.mjs';
+import luckgramPlugin, {luckgramHtmlContext} from './scripts/luckgram/vite-plugin.mjs';
 import path from 'path';
 import {createRequire} from 'module';
 import {fileURLToPath} from 'url';
@@ -67,13 +68,9 @@ if(isDEV) {
   }
 }
 
+// Luckgram: its own title, description and address (scripts/luckgram/vite-plugin.mjs)
 const handlebarsPlugin = handlebars({
-  context: {
-    title: 'Telegram Web',
-    description: 'Telegram is a cloud-based mobile and desktop messaging app with a focus on security and speed.',
-    url: 'https://web.telegram.org/k/',
-    origin: 'https://web.telegram.org/'
-  }
+  context: luckgramHtmlContext()
 });
 
 const USE_SSL = false;
@@ -270,6 +267,7 @@ export default defineConfig({
     solidPlugin(),
     widgetSandboxPlugin(rootDir),
     handlebarsPlugin as any,
+    luckgramPlugin(),
     compileHintsPlugin(),
     preloadHelperCssWaitPlugin(),
     USE_SELF_SIGNED_CERTS ? basicSsl(BASIC_SSL_CONFIG) : undefined,

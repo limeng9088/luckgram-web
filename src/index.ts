@@ -66,6 +66,8 @@ import useHasFoldersSidebar, {useIsSidebarCollapsed} from '@stores/foldersSideba
 import appNavigationController from '@components/appNavigationController';
 import {preventCrossTabDynamicImportDeadlock} from '@helpers/preventDeadlock';
 import appChatBackground from '@components/chat/bubbles/chatBackground';
+import {initLuckgram} from '@/luckgram';
+import {followBrowserLanguage} from '@/luckgram/language';
 
 // import commonStateStorage from '@lib/commonStateStorage';
 // import { STATE_INIT } from '@config/state';
@@ -447,6 +449,7 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   listenForLinkPress();
   setRootClasses();
   if(Modes.test) mountTestDcBadge();
+  initLuckgram();
 
   // ?popups=1 — the popup sandbox: every popup, opened by click with mock data and no session.
   // It has to take over here, before the session is restored and the auth flow starts.
@@ -569,7 +572,9 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   themeController.setThemeListener();
 
   // * fetch lang pack updates
-  if((langPack.localVersion !== I18n.getLocalVersion() || true) && IS_BETA) {
+  if(followBrowserLanguage(langPack, (langCode) => I18n.getLangPackAndApply(langCode))) {
+    // * Luckgram: a Chinese browser is switched to Chinese, which brings the pack up to date as well
+  } else if((langPack.localVersion !== I18n.getLocalVersion() || true) && IS_BETA) {
     I18n.getLangPackAndApply(langPack.lang_code);
   } else {
     checkLangPackForUpdates();

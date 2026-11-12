@@ -57,7 +57,9 @@ const BOOT_IMPORTS = ['src/pages/bootstrapIm.ts', 'src/pages/mountAuthFlow.tsx',
 const CUT_ROOTS = new Set([PAGE_ENTRY, 'src/pages/bootstrapIm.ts', 'src/lib/solidjs/hotReloadGuardValue.ts', 'src/components/popupSandbox/index.ts']);
 let cutTo = new Set();
 
-const isAppModule = (f) => f.startsWith('src/') && !f.startsWith('src/vendor/') && !TEST_FILE.test(f);
+// * Luckgram: src/luckgram/ is not counted, so the budget stays upstream's number and merges of upstream
+// * do not conflict on it. Those modules are small and stateless; an edit of one reloads the page.
+const isAppModule = (f) => f.startsWith('src/') && !f.startsWith('src/vendor/') && !f.startsWith('src/luckgram/') && !TEST_FILE.test(f);
 const percent = (n, of) => (100 * n / of).toFixed(0) + '%';
 const pad = (s, n) => String(s).padStart(n);
 

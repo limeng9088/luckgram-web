@@ -1,3 +1,70 @@
+## Luckgram Web
+
+Luckgram's web app: [Telegram Web K](https://github.com/morethanwords/tweb) with the Luckgram name and icons,
+its own Telegram API credentials, Simplified Chinese by default in a Chinese browser, and an automatic
+deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.com/limeng9088/luckgram-specs)
+(`docs/web.md`, `specs/web/`).
+
+| | |
+|---|---|
+| Production | https://web.luckgram.cc (backup entrance https://lgweb.cat158.com) |
+| Development | https://web-dev.luckgram.cc — every commit of `master`, marked **DEV** |
+| Source | https://github.com/limeng9088/luckgram-web |
+
+### Upstream
+
+- Based on `morethanwords/tweb`, branch `master`, commit
+  [`2e4bbb52b6aec5e95ee32e5c2882c1f05de32200`](https://github.com/morethanwords/tweb/commit/2e4bbb52b6aec5e95ee32e5c2882c1f05de32200)
+  (Telegram Web K 2.3 (687)), imported with its whole history. This line is updated with every merge of upstream.
+- Upstream is merged, never rebased — the history of `master` is not rewritten:
+  ```bash
+  git remote add upstream https://github.com/morethanwords/tweb.git   # once
+  git fetch upstream
+  git checkout -b chore/sync-upstream origin/master
+  git merge upstream/master        # resolve conflicts, keep the Luckgram lines in the files listed below
+  pnpm install && pnpm test --run && pnpm typecheck
+  # update the commit above, open a pull request; CI builds it and deploys a preview
+  ```
+- To keep those merges small, Luckgram's code lives in `src/luckgram/` and `scripts/luckgram/`. Upstream files
+  only get the few lines that call into it: `vite.config.ts`, `src/index.ts`, `src/config/app.ts`,
+  `src/lib/langPack.ts`, `src/lib/serviceWorker/cache.ts`, `src/lib/serviceWorker/push.ts`,
+  `src/lib/appManagers/apiUpdatesManager.ts`, `src/components/sidebarLeft/index.ts`,
+  `src/components/sidebarLeft/tabs/settings.tsx`, `scripts/import-graph.mjs`. `public/` (upstream's last committed bundle and its
+  static files) is left as upstream has it; Luckgram's icons and manifest are laid over it when the site is
+  assembled.
+
+### Building and deploying
+
+- Telegram API credentials are **not** in this repository. A build takes `TG_API_ID` / `TG_API_HASH` from the
+  environment (in CI: the repository's Actions secrets) and fails without them; it never falls back to the
+  pair upstream keeps in `.env`.
+  ```bash
+  pnpm install
+  pnpm start                                       # dev server on :8080
+  TG_API_ID=… TG_API_HASH=… LUCKGRAM_CHANNEL=dev pnpm build
+  node scripts/luckgram/assemble.mjs               # → tmp/luckgram-site, what is deployed
+  node scripts/luckgram/check-site.mjs
+  ```
+- `.github/workflows/build.yml` — every push to `master`, pull request and manual run: tests, type check,
+  build. `master` is deployed to Cloudflare Pages project `luckgram-web-dev` (https://web-dev.luckgram.cc), a
+  pull request to a preview (`https://<branch>.luckgram-web-dev.pages.dev`) that is linked in the pull request.
+- `.github/workflows/release.yml` — run by hand with a commit of `master`: deploys the production address
+  (Cloudflare Pages project `luckgram-web`). Nothing else deploys production.
+- The deployed page only talks to Telegram's servers and Luckgram's own domains; the
+  Content-Security-Policy in `scripts/luckgram/headers.mjs` enforces it.
+
+### License
+
+Luckgram Web is distributed under the [GNU General Public License v3.0](LICENSE), the license of Telegram Web K,
+and its source is this repository. It is a modified version of Telegram Web K — © Eduard Kuzmenko and the tweb
+contributors — which is based on Webogram, © 2014 Igor Zhukov. The copyright notices in the source files are
+kept as they are; Luckgram's changes are © the Luckgram contributors and are marked in the files they touch.
+Luckgram is not affiliated with Telegram.
+
+The rest of this file is upstream's README.
+
+---
+
 ## Telegram Web K
 Based on Webogram, patched and improved. Available for everyone here: https://web.telegram.org/k/
 

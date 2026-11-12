@@ -19,6 +19,8 @@ import {createSignal} from 'solid-js';
 import commonStateStorage from '@lib/commonStateStorage';
 import Icon from '@components/icon';
 import currencyStarIcon from '@components/currencyStarIcon';
+import {luckgramBrandString} from '@/luckgram/brandStrings';
+import {setLuckgramLangCode} from '@/luckgram/text';
 
 export const langPack: {[actionType: string]: LangPackKey} = {
   'messageActionChatCreate': 'ActionCreateGroup',
@@ -342,8 +344,9 @@ namespace I18n {
     strings.clear();
     untranslatedKeys.clear();
 
+    setLuckgramLangCode(langPack.lang_code);
     for(const string of langPack.strings) {
-      strings.set(string.key as LangPackKey, string);
+      strings.set(string.key as LangPackKey, luckgramBrandString(string));
     }
 
     const rtl = langPack.rtl ?? isRTLLangCode(langPack.lang_code);

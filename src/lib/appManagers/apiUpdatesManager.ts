@@ -939,7 +939,7 @@ class ApiUpdatesManager {
         }
 
         const langStr = strs[lang] || strs.en;
-        const pre = `**Telegram Web${App.suffix} ${langStr} ${newVersion}**\n\n`;
+        const pre = `**Luckgram ${langStr} ${newVersion}**\n\n`;
         text = pre + text;
 
         const [message, entities] = parseMarkdown(text, []);
