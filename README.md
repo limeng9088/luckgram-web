@@ -29,7 +29,8 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   only get the few lines that call into it: `vite.config.ts`, `src/index.ts`, `src/config/app.ts`,
   `src/lib/langPack.ts`, `src/lib/serviceWorker/cache.ts`, `src/lib/serviceWorker/push.ts`,
   `src/lib/appManagers/apiUpdatesManager.ts` (and its test `src/tests/changelogDelivery.test.ts`), `src/components/sidebarLeft/index.ts`,
-  `src/components/sidebarLeft/tabs/settings.tsx`, `scripts/import-graph.mjs`. `public/` (upstream's last committed bundle and its
+  `src/components/sidebarLeft/tabs/settings.tsx`, `src/components/sidebarLeft/tabs/experimental.tsx`,
+  `src/lib/mtproto/dcConfigurator.ts`, `src/lib/mtproto/transports/controller.ts`, `scripts/import-graph.mjs`. `public/` (upstream's last committed bundle and its
   static files) is left as upstream has it; Luckgram's icons and manifest are laid over it when the site is
   assembled.
 
@@ -52,6 +53,14 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   (Cloudflare Pages project `luckgram-web`). Nothing else deploys production.
 - The deployed page only talks to Telegram's servers and Luckgram's own domains; the
   Content-Security-Policy in `scripts/luckgram/headers.mjs` enforces it.
+
+### Relay
+
+Where Telegram's addresses cannot be reached, the web app connects through Luckgram's WebSocket relay
+instead — a Cloudflare Worker in [`relay/`](relay/README.md) that passes the connection on unread. A
+connection tries Telegram's address and the relay and uses whichever answers; Settings → the version line →
+Experimental → "连接方式 / Connection" shows the route in use and can pin it. The web app's side is in
+`src/luckgram/relay/`.
 
 ### License
 

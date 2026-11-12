@@ -17,6 +17,7 @@ import {DcId} from '@types';
 import {getEnvironment} from '@environment/utils';
 import SocketProxied from '@lib/mtproto/transports/socketProxied';
 import isValidDcId from '@lib/mtproto/isValidDcId';
+import {makeRoutedConnection} from '@/luckgram/relay/routedSocket';
 
 export type TransportType = 'websocket' | 'https' | 'http';
 export type ConnectionType = 'client' | 'download' | 'upload';
@@ -98,7 +99,8 @@ export class DcConfigurator {
       oooohLetMeLive = (getEnvironment().IS_SAFARI && IS_WEB_WORKER && typeof(SocketProxied) !== 'undefined') /* || true */ ? SocketProxied : Socket;
     }
 
-    return new TcpObfuscated(oooohLetMeLive, dcId, chosenServer, logSuffix, retryTimeout);
+    // * Luckgram: the connection chooses between Telegram's address and Luckgram's relays (src/luckgram/relay)
+    return new TcpObfuscated(makeRoutedConnection(oooohLetMeLive), dcId, chosenServer, logSuffix, retryTimeout);
   };
 
   private transportHTTP = (dcId: DcId, connectionType: ConnectionType, premium?: boolean) => {

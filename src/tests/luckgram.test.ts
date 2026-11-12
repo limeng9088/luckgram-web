@@ -167,7 +167,11 @@ describe('luckgram: the headers of the deployed site', () => {
     expect(connect).toEqual([
       '\'self\'', 'data:', 'blob:',
       'https://*.telegram.org', 'wss://*.telegram.org',
-      'https://*.luckgram.cc', 'wss://*.luckgram.cc'
+      'https://*.luckgram.cc', 'wss://*.luckgram.cc',
+      // * the backup relay and the API's backup addresses, for when luckgram.cc is blocked
+      'wss://lgws.cat158.com', 'https://lg.cat158.com', 'https://lg-dev.cat158.com',
+      // * Telegram's built-in payments
+      'https://api.stripe.com'
     ]);
 
     expect(csp).toContain('default-src \'self\'');
