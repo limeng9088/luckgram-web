@@ -38,6 +38,12 @@ const write = (key: string, value: string | undefined) => {
   } catch(err) {}
 };
 
+/**
+ * Where the server's say comes from (W3): set by `initRoutePage`. Declared above everything that
+ * reads the settings — the module itself reads them once as it loads.
+ */
+let remote: {relays?: () => string[] | undefined, relayMedia?: () => boolean | undefined} = {};
+
 export function readRouteConfig(): RouteConfig {
   const config = getDefaultRouteConfig();
   const mode = read(MODE_KEY);
@@ -54,9 +60,6 @@ export function readRouteConfig(): RouteConfig {
 
 const [routeStatus, setRouteStatus] = createSignal<RouteStatus>({mode: readRouteConfig().mode});
 export {routeStatus};
-
-/** Where the server's say comes from (W3): set by `initRoutePage`, absent in tests. */
-let remote: Pick<RoutePageOptions, 'relays' | 'relayMedia'> = {};
 
 let channel: BroadcastChannel;
 let onRetry: () => void;
