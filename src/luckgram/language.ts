@@ -12,13 +12,32 @@ import {isLuckgramBrowserChinese} from '@/luckgram/text';
 const FOLLOWED_KEY = 'lg_lang_followed';
 
 type LangPackLike = {lang_code: string};
-type Apply = (langCode: string) => Promise<any>;
+type I18nLike = {
+  getLangPackAndApply: (langCode: string) => Promise<any>,
+  getCacheLangPackAndApply: () => Promise<any>,
+  getLastRequestedLangCode: () => string
+};
+
+async function apply(I18n: I18nLike, langCode: string) {
+  await I18n.getLangPackAndApply(langCode);
+
+  // * the sign-in page's "Continue in …" button applies the stored pack again while ours is on its way
+  // * (languageChangeButton.tsx); the pack that then arrives is stored but skipped as not the current one.
+  // * It is the stored one now, so applying the stored pack once more shows it.
+  if(I18n.getLastRequestedLangCode() !== langCode) {
+    await I18n.getCacheLangPackAndApply();
+  }
+
+  if(I18n.getLastRequestedLangCode() !== langCode) {
+    throw new Error('LANG_NOT_APPLIED');
+  }
+}
 
 /**
  * @returns the promise of the switch when it was started, otherwise undefined and the caller goes
  * on with its own language pack update
  */
-export function followBrowserLanguage(langPack: LangPackLike, apply: Apply): Promise<void> | undefined {
+export function followBrowserLanguage(langPack: LangPackLike, I18n: I18nLike): Promise<void> | undefined {
   try {
     if(localStorage.getItem(FOLLOWED_KEY)) return;
 
@@ -31,7 +50,7 @@ export function followBrowserLanguage(langPack: LangPackLike, apply: Apply): Pro
     return;
   }
 
-  return apply(LUCKGRAM_ZH_LANG_CODE).then(() => {
+  return apply(I18n, LUCKGRAM_ZH_LANG_CODE).then(() => {
     try {
       localStorage.setItem(FOLLOWED_KEY, '1');
     } catch(err) {}

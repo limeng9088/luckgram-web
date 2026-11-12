@@ -572,7 +572,7 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   themeController.setThemeListener();
 
   // * fetch lang pack updates
-  if(followBrowserLanguage(langPack, (langCode) => I18n.getLangPackAndApply(langCode))) {
+  if(followBrowserLanguage(langPack, I18n)) {
     // * Luckgram: a Chinese browser is switched to Chinese, which brings the pack up to date as well
   } else if((langPack.localVersion !== I18n.getLocalVersion() || true) && IS_BETA) {
     I18n.getLangPackAndApply(langPack.lang_code);

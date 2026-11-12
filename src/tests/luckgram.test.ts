@@ -76,38 +76,66 @@ describe('luckgram: the browser language', () => {
     Object.defineProperty(navigator, 'language', {value: languages[0], configurable: true});
   };
 
+  // * the part of I18n the switch uses: `raced` is the sign-in page applying the stored pack meanwhile
+  const makeI18n = (options: {fail?: boolean, raced?: boolean} = {}) => {
+    let current = 'en', stored = 'en';
+    const i18n = {
+      getLangPackAndApply: vi.fn(async(langCode: string) => {
+        if(options.fail) throw new Error('offline');
+        stored = langCode;
+        if(!options.raced) current = langCode;
+      }),
+      getCacheLangPackAndApply: vi.fn(async() => {
+        current = stored;
+      }),
+      getLastRequestedLangCode: () => current
+    };
+    return i18n;
+  };
+
   beforeEach(() => localStorage.clear());
 
   test('a Chinese browser on the bundled English pack is switched to Chinese, once', async() => {
     setLanguages(['zh-CN', 'en']);
-    const apply = vi.fn(() => Promise.resolve());
-    await followBrowserLanguage({lang_code: 'en'}, apply);
-    expect(apply).toHaveBeenCalledWith('zh-hans-raw');
+    const i18n = makeI18n();
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledWith('zh-hans-raw');
+    expect(i18n.getLastRequestedLangCode()).toBe('zh-hans-raw');
+    expect(i18n.getCacheLangPackAndApply).not.toHaveBeenCalled();
 
     // * the user went back to English in Settings: it stays
-    expect(followBrowserLanguage({lang_code: 'en'}, apply)).toBeUndefined();
-    expect(apply).toHaveBeenCalledTimes(1);
+    expect(followBrowserLanguage({lang_code: 'en'}, i18n)).toBeUndefined();
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledTimes(1);
+  });
+
+  test('the pack is shown even when the sign-in page applied the stored one meanwhile', async() => {
+    setLanguages(['zh-CN']);
+    const i18n = makeI18n({raced: true});
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getCacheLangPackAndApply).toHaveBeenCalledTimes(1);
+    expect(i18n.getLastRequestedLangCode()).toBe('zh-hans-raw');
+    expect(localStorage.getItem('lg_lang_followed')).toBe('1');
   });
 
   test('a failed switch is tried again at the next start', async() => {
     setLanguages(['zh-TW']);
-    const apply = vi.fn(() => Promise.reject(new Error('offline')));
+    const i18n = makeI18n({fail: true});
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await followBrowserLanguage({lang_code: 'en'}, apply);
-    await followBrowserLanguage({lang_code: 'en'}, apply);
-    expect(apply).toHaveBeenCalledTimes(2);
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledTimes(2);
     warn.mockRestore();
   });
 
   test('any other browser stays in English, and a chosen language is kept', () => {
-    const apply = vi.fn(() => Promise.resolve());
+    const i18n = makeI18n();
     setLanguages(['en-US', 'zh-CN']);
-    expect(followBrowserLanguage({lang_code: 'en'}, apply)).toBeUndefined();
+    expect(followBrowserLanguage({lang_code: 'en'}, i18n)).toBeUndefined();
 
     localStorage.clear();
     setLanguages(['zh-CN']);
-    expect(followBrowserLanguage({lang_code: 'ru'}, apply)).toBeUndefined();
-    expect(apply).not.toHaveBeenCalled();
+    expect(followBrowserLanguage({lang_code: 'ru'}, i18n)).toBeUndefined();
+    expect(i18n.getLangPackAndApply).not.toHaveBeenCalled();
   });
 });
 
