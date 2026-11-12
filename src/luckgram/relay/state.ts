@@ -38,7 +38,8 @@ export type RouteStatus = {
 
 export type RouteMessage =
   {type: 'hello'} |
-  {type: 'config', config: RouteConfig} |
+  /** `account`: the account on screen in the tab that sends it — its connections go first (specs#146) */
+  {type: 'config', config: RouteConfig, account?: number} |
   {type: 'status', status: RouteStatus} |
   {type: 'retry'};
 

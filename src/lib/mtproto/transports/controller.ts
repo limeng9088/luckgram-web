@@ -36,7 +36,20 @@ export class MTTransportController extends EventListenerBase<{
     // }, 200); // wait for first transport so won't have delay for first WS
   }
 
-  public async pingTransports() {
+  // * Luckgram: one probe at a time, shared by everyone who asks while it runs. Upstream starts one per caller —
+  // * the worker's own and one per account slot, five as a page opens — each with a WebSocket of its own to the
+  // * same address, and a browser makes WebSocket handshakes to one address one after another. With a handshake
+  // * of 2 s (a relay, a far network) the last ones waited past their time and were taken for "no WebSocket"
+  // * (luckgram-specs#146).
+  private pingPromise: ReturnType<MTTransportController['pingTransportsOnce']>;
+
+  public pingTransports() {
+    return this.pingPromise ??= this.pingTransportsOnce().finally(() => {
+      this.pingPromise = undefined;
+    });
+  }
+
+  private async pingTransportsOnce() {
     const dcConfigurator = this.dcConfigurator ??= new DcConfigurator();
     const timeout = 2000;
     const transports: {[k in TransportType]?: MTTransport} = this.transports = {
