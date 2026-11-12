@@ -33,6 +33,7 @@ import {MainBroadcastChannelEvents, unversionedMainBroadcastChannelName} from '@
 import objectUrlRegistry from '@lib/mainWorker/objectUrlRegistry';
 import SharedObjectUrlCache, {getSharedObjectURLCacheStats, resetSharedObjectURLCaches} from '@lib/mainWorker/sharedObjectUrlCache';
 import TabIntervals from '@lib/mainWorker/tabIntervals';
+import {diag, diagStack} from '@/luckgram/diag';
 
 
 const log = logger('MTPROTO');
@@ -64,6 +65,7 @@ const singleManagers = {
 
 port.addMultipleEventsListeners({
   environment: (environment) => {
+    diag('worker', 'environment received');
     setEnvironment(environment);
 
     // Probes the base DC every 10 s until a WebSocket opens. A sandbox runs on fixtures with no
@@ -157,6 +159,7 @@ port.addMultipleEventsListeners({
   setLogBufferEnabled: (enabled) => setLogBufferEnabled(enabled),
 
   state: ({state, resetStorages, pushedKeys, newVersion, oldVersion, userId, accountNumber, common, refetchStorages}) => {
+    diag('worker', 'state received for account', accountNumber, 'userId', userId ? 'yes' : 'no');
     // if(haveState) {
     //   return;
     // }
@@ -265,6 +268,7 @@ port.addMultipleEventsListeners({
   },
 
   terminate: () => {
+    diag('worker', 'terminate');
     selfTerminate();
   },
 

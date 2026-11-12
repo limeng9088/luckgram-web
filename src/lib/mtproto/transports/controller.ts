@@ -7,6 +7,7 @@ import type HTTP from '@lib/mtproto/transports/http';
 import type TcpObfuscated from '@lib/mtproto/transports/tcpObfuscated';
 import MTTransport from '@lib/mtproto/transports/transport';
 import {LUCKGRAM_WEBSOCKET_PROBE_TIMEOUT} from '@/luckgram/relay/routes';
+import {diag, diagStack} from '@/luckgram/diag';
 
 export class MTTransportController extends EventListenerBase<{
   change: (opened: MTTransportController['opened']) => void,
@@ -44,6 +45,7 @@ export class MTTransportController extends EventListenerBase<{
   private pingPromise: ReturnType<MTTransportController['pingTransportsOnce']>;
 
   public pingTransports() {
+    diag('probe', this.pingPromise ? 'joined the running probe' : 'new probe', 'by', diagStack());
     return this.pingPromise ??= this.pingTransportsOnce().finally(() => {
       this.pingPromise = undefined;
     });
@@ -89,7 +91,10 @@ export class MTTransportController extends EventListenerBase<{
       });
     }, timeout);
 
+    websocketPromise.then((ok) => diag('probe', 'websocket:', ok));
+    httpPromise.then((ok) => diag('probe', 'https:', ok));
     const [isHttpAvailable, isWebSocketAvailable] = await Promise.all([httpPromise, websocketPromise]);
+    diag('probe', 'both settled; destroying the probe transports');
 
     for(const transportType in transports) {
       const transport = transports[transportType as TransportType];
@@ -102,16 +107,19 @@ export class MTTransportController extends EventListenerBase<{
     };
 
     // result.websocket = false;
+    diag('probe', 'result', result, 'opened counts', [...this.opened]);
     return result;
   }
 
   public async waitForWebSocket() {
+    diag('probe', 'waitForWebSocket called, already pinging:', !!this.pinging);
     if(this.pinging) return;
     this.pinging = true;
 
     while(true) {
       const {https, websocket} = await this.pingTransports();
       if(https || websocket) {
+        diag('probe', 'waitForWebSocket dispatches transport', websocket || !https ? 'websocket' : 'https');
         this.dispatchEvent('transport', websocket || !https ? 'websocket' : 'https');
       }
 
