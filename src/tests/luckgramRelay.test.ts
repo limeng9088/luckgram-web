@@ -7,7 +7,8 @@ import {
   ATTEMPT_TIMEOUT, RouteConfig, getRouteCandidates, getStartDelays, normalizeRelays, parseOfficialUrl
 } from '@/luckgram/relay/routes';
 import {sanitizeRouteConfig} from '@/luckgram/relay/state';
-import {applyRouteConfig, makeRoutedConnection} from '@/luckgram/relay/routedSocket';
+import {applyRouteConfig, getRouteTraffic, makeRoutedConnection} from '@/luckgram/relay/routedSocket';
+import {describeRouteTraffic, formatBytes} from '@/luckgram/relay/traffic';
 import {allowedOrigins, decide, isOriginAllowed, parseRelayPath} from '../../relay/src/rules.js';
 import {getLuckgramRelays} from '../../scripts/luckgram/vite-plugin.mjs';
 
@@ -271,6 +272,34 @@ describe('luckgram relay: the connection that tries the routes', () => {
     byUrl('telegram.org').open();
     applyRouteConfig(config({mode: 'relay'}));
     expect(events).toEqual(['open', 'close']);
+  });
+
+  test('bytes are counted per route and kind of connection', async() => {
+    const before = JSON.parse(JSON.stringify(getRouteTraffic()));
+    const {connection} = await connect();
+    byUrl('ws.luckgram.cc').open();
+    connection.send(new Uint8Array(100));
+    byUrl('ws.luckgram.cc').dispatchEvent('message', new ArrayBuffer(2000));
+    // * a socket that lost the race is not counted
+    byUrl('telegram.org').dispatchEvent('message', new ArrayBuffer(7));
+
+    FakeSocket.all = [];
+    applyRouteConfig(config({mode: 'official'}));
+    await connect(MEDIA, '-D');
+    FakeSocket.all[0].open();
+    FakeSocket.all[0].dispatchEvent('message', new ArrayBuffer(5000));
+
+    const after = getRouteTraffic();
+    expect(after.relayClient.connections - before.relayClient.connections).toBe(1);
+    expect(after.relayClient.up - before.relayClient.up).toBe(100);
+    expect(after.relayClient.down - before.relayClient.down).toBe(2000);
+    expect(after.officialMedia.down - before.officialMedia.down).toBe(5000);
+    expect(after.officialClient.down - before.officialClient.down).toBe(0);
+
+    expect(formatBytes(900)).toBe('900 B');
+    expect(formatBytes(2048)).toBe('2.0 KB');
+    expect(formatBytes(5 * 1048576)).toBe('5.00 MB');
+    expect(describeRouteTraffic(after).split('\n').length).toBe(4);
   });
 
   test('web.relay_media=false: a download goes to Telegram only', async() => {

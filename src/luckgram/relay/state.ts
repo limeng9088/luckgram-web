@@ -15,13 +15,25 @@ import {RouteConfig, RouteKind, RouteMode, isRouteMode, normalizeRelays} from '@
 
 export const ROUTE_CHANNEL_NAME = 'luckgram-route';
 
+/** Bytes and connections since the connections' context started, per route and kind of connection. */
+export type RouteTraffic = {
+  [key in 'relayClient' | 'relayMedia' | 'officialClient' | 'officialMedia']: {connections: number, up: number, down: number}
+};
+
+export function emptyRouteTraffic(): RouteTraffic {
+  const zero = () => ({connections: 0, up: 0, down: 0});
+  return {relayClient: zero(), relayMedia: zero(), officialClient: zero(), officialMedia: zero()};
+}
+
 export type RouteStatus = {
   /** undefined until a connection was tried */
   state?: 'connected' | 'failed',
   kind?: RouteKind,
   /** 'official' or the relay's base address */
   id?: string,
-  mode: RouteMode
+  mode: RouteMode,
+  /** what went over each route — for measuring the relay's usage (W2 需求 9) */
+  traffic?: RouteTraffic
 };
 
 export type RouteMessage =

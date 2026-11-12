@@ -10,6 +10,7 @@ import Row from '@components/rowTsx';
 import Section from '@components/section';
 import {RouteMode} from '@/luckgram/relay/routes';
 import {RouteStatus} from '@/luckgram/relay/state';
+import {describeRouteTraffic} from '@/luckgram/relay/traffic';
 import {routeStatus, setRouteMode} from '@/luckgram/relay/page';
 import {lgText} from '@/luckgram/text';
 
@@ -39,7 +40,15 @@ export default function LuckgramConnectionSection(): JSX.Element {
   return (
     <Section
       name={<span>{lgText('连接方式', 'Connection')}</span>}
-      caption={<span class="luckgram-route-status">{describeRouteStatus(routeStatus())}</span>}
+      caption={
+        <span class="luckgram-route-status">
+          {describeRouteStatus(routeStatus())}
+          <span class="luckgram-route-traffic" dir="ltr">
+            {lgText('本次打开以来（连接数 · 上行 下行）', 'Since the app was opened (connections · up down)')}
+            {'\n' + describeRouteTraffic(routeStatus().traffic)}
+          </span>
+        </span>
+      }
     >
       <For each={MODES}>{(item) => (
         <Row>

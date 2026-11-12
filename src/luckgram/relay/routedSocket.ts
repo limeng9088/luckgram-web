@@ -13,7 +13,7 @@ import EventListenerBase from '@helpers/eventListenerBase';
 import ctx from '@environment/ctx';
 import {MTConnection, MTConnectionConstructable, MTConnectionEvents} from '@lib/mtproto/transports/transport';
 import {ATTEMPT_TIMEOUT, RouteCandidate, RouteConfig, getRouteCandidates, getStartDelays} from '@/luckgram/relay/routes';
-import {RouteMessage, RouteStatus, getDefaultRouteConfig, openRouteChannel, sanitizeRouteConfig} from '@/luckgram/relay/state';
+import {RouteMessage, RouteStatus, emptyRouteTraffic, getDefaultRouteConfig, openRouteChannel, sanitizeRouteConfig} from '@/luckgram/relay/state';
 
 const CONFIG_WAIT = 400;
 
@@ -23,9 +23,24 @@ let channel: BroadcastChannel;
 let configReady: Promise<void>;
 const live = new Set<{forceClose: () => void}>();
 
+const traffic = emptyRouteTraffic();
+let trafficTimer: number;
+
 function postStatus(next: Partial<RouteStatus>) {
-  status = {...status, ...next, mode: config.mode};
+  status = {...status, ...next, mode: config.mode, traffic};
   channel?.postMessage({type: 'status', status} satisfies RouteMessage);
+}
+
+/** The counters reach the page with the next status, and at most every few seconds on their own. */
+function trafficChanged() {
+  trafficTimer ??= ctx.setTimeout(() => {
+    trafficTimer = undefined;
+    postStatus({});
+  }, 3000);
+}
+
+export function getRouteTraffic() {
+  return traffic;
 }
 
 /** The settings as the page sent them (and, in tests, as a test sets them). */
@@ -73,11 +88,14 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
     private closed = false;
     private opened = false;
     private isMain: boolean;
+    private isMedia: boolean;
+    private counter: {connections: number, up: number, down: number};
 
     constructor(private dcId: number, private url: string, private logSuffix: string) {
       super();
       // * the status the page shows is the main connection's, not a download's
       this.isMain = !logSuffix;
+      this.isMedia = !!logSuffix;
       live.add(this);
       init().then(() => this.start());
     }
@@ -104,6 +122,9 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
 
           this.opened = true;
           this.winner = connection;
+          this.counter = traffic[`${candidate.kind}${this.isMedia ? 'Media' : 'Client'}`];
+          ++this.counter.connections;
+          trafficChanged();
           this.clearTimers();
           this.attempts.forEach((_, other) => other !== connection && other.close());
           this.attempts.clear();
@@ -117,7 +138,10 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
         });
 
         connection.addEventListener('message', (buffer) => {
-          if(this.winner === connection) this.dispatchEvent('message', buffer);
+          if(this.winner !== connection) return;
+          this.counter.down += buffer.byteLength;
+          trafficChanged();
+          this.dispatchEvent('message', buffer);
         });
 
         connection.addEventListener('close', () => {
@@ -176,7 +200,10 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable): MTC
     }
 
     public send = (body: Uint8Array) => {
-      this.winner?.send(body);
+      if(!this.winner) return;
+      this.counter.up += body.byteLength;
+      trafficChanged();
+      this.winner.send(body);
     };
 
     public close() {
