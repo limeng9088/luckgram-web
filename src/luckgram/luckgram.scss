@@ -101,3 +101,152 @@
   white-space: pre-line;
   font-variant-numeric: tabular-nums;
 }
+
+// ---- W3: Settings → Luckgram 功能
+
+// the row's icon: the Luckgram plane (brand/plane.path) in place of the icon font's glyph
+.luckgram-row-icon {
+  background-image: none !important;
+  background-color: #1b1e23;
+
+  .row-icon-icon {
+    visibility: hidden;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 15%;
+    background: #fff;
+    mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='56 80 388 330'><path fill-rule='evenodd' d='M116.6,391.4C120.4,388.8 141.8,372.1 173.8,346.7C190.2,333.7 192.0,331.4 188.8,328.2C185.1,324.5 180.8,327.6 140.0,363.8C118.6,382.9 109.7,391.7 110.5,393.0C111.4,394.5 112.3,394.3 116.6,391.4ZM320.4,390.6C322.6,388.3 325.4,382.2 329.9,370.4C333.4,361.1 353.1,309.6 373.8,256.0C394.4,202.4 414.7,149.5 418.9,138.5C428.2,114.4 429.4,110.1 428.6,105.6C427.6,100.6 423.0,97.0 417.5,97.0C409.2,97.0 389.0,104.9 208.0,179.3C115.5,217.3 112.5,218.7 107.6,225.3C104.9,229.0 104.9,235.0 107.6,238.7C108.8,240.2 115.0,245.3 121.6,250.0C128.1,254.6 142.7,265.1 154.0,273.2C171.3,285.7 175.1,288.0 178.1,288.0C182.3,288.0 181.7,288.4 208.1,265.6C249.6,229.8 290.7,198.4 336.3,167.7C360.1,151.7 363.0,150.2 363.0,154.3C363.0,157.1 296.7,220.9 233.3,279.3C208.6,302.0 202.9,307.8 201.9,310.8C200.2,316.5 205.2,365.4 207.8,369.0C210.0,371.9 214.4,372.8 216.7,370.8C217.6,370.1 223.5,361.7 229.7,352.2C239.9,336.6 241.3,335.0 242.8,336.1C246.6,339.1 265.5,355.5 282.8,371.0C308.7,394.1 308.6,394.0 313.3,394.0C316.5,394.0 317.8,393.4 320.4,390.6ZM98.2,357.9C168.1,306.4 169.0,305.7 169.0,303.0C169.0,299.8 167.3,298.0 164.4,298.0C162.0,298.0 148.1,308.6 113.6,336.9C75.5,368.1 68.2,375.0 73.4,375.0C74.2,375.0 85.3,367.3 98.2,357.9Z'/></svg>") center / contain no-repeat;
+  }
+}
+
+.luckgram-features-footer {
+  padding: .5rem 1rem 1.5rem;
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-14);
+  color: var(--secondary-text-color);
+  text-align: center;
+  white-space: pre-line;
+}
+
+// ---- W3: the announcement over the chat list
+
+.luckgram-announcement {
+  display: flex;
+  align-items: flex-start;
+  gap: .5rem;
+  margin: .5rem .5rem 0;
+  padding: .625rem .5rem .625rem .875rem;
+  border-radius: 12px;
+  background: var(--light-primary-color, rgba(51, 144, 236, .1));
+  color: var(--primary-text-color);
+  text-decoration: none;
+  flex: 0 0 auto;
+
+  &-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  &-title {
+    font-weight: 500;
+    font-size: var(--font-size-15, 15px);
+    line-height: 1.3;
+  }
+
+  &-body {
+    margin-top: 2px;
+    font-size: var(--font-size-14);
+    line-height: 1.35;
+    color: var(--secondary-text-color);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  &-close {
+    flex: none;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--secondary-text-color);
+    font-size: 20px;
+    line-height: 28px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--light-secondary-text-color, rgba(0, 0, 0, .06));
+    }
+  }
+}
+
+// ---- W3: the debug page (development address only)
+
+.luckgram-debug {
+  &-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    padding: .25rem 1rem;
+
+    button {
+      padding: .375rem .875rem;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary-color);
+      color: #fff;
+      font: inherit;
+      font-size: var(--font-size-14);
+      cursor: pointer;
+
+      &:disabled {
+        opacity: .5;
+        cursor: default;
+      }
+    }
+
+    input[type='file'] {
+      max-width: 100%;
+      font: inherit;
+      font-size: var(--font-size-14);
+      color: var(--primary-text-color);
+    }
+  }
+
+  &-input {
+    display: block;
+    width: calc(100% - 2rem);
+    margin: .25rem 1rem;
+    padding: .5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--surface-color);
+    color: var(--primary-text-color);
+    font: inherit;
+    resize: vertical;
+  }
+
+  &-result {
+    margin: .25rem 1rem .5rem;
+    padding: .5rem;
+    border-radius: 8px;
+    background: var(--background-color-true, rgba(0, 0, 0, .04));
+    color: var(--primary-text-color);
+    font: inherit;
+    font-size: var(--font-size-14);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    user-select: text;
+  }
+
+  &-busy {
+    padding: 0 1rem 1rem;
+    font-size: var(--font-size-14);
+    color: var(--secondary-text-color);
+  }
+}
