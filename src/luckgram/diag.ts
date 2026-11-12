@@ -50,12 +50,13 @@ export function diag(tag: string, ...args: any[]) {
 /** Who called: a few frames of the stack, for "who closed this". */
 export function diagStack(skip = 2, depth = 5) {
   return (new Error().stack || '').split('\n').slice(skip, skip + depth)
-  .map((frame) => frame.trim().replace(/^at /, '').replace(/\(?https?:\/\/[^/]+\//, '(').slice(0, 60)).join(' < ');
+  .map((frame) => frame.trim().replace(/^at /, '').replace(/\(?https?:\/\/[^/]+\//, '(').replace(/\?[^:)]*/, '').slice(0, 70)).join(' < ');
 }
 
 let onLine: (line: Line) => void;
 const beats = new Map<string, {t: number, lag: number, born: number, seenAt: number}>();
 const remote: Line[] = [];
+const seen = new Set<string>();
 
 channel?.addEventListener('message', (event) => {
   const message = event.data as Message;
@@ -63,9 +64,16 @@ channel?.addEventListener('message', (event) => {
     streaming = true;
     channel.postMessage({type: 'lines', lines: lines.slice()} satisfies Message);
   } else if(message?.type === 'lines' && isPage) {
-    remote.push(...message.lines);
+    // * a context answers every request with all it has: the same line comes more than once
+    for(const line of message.lines) {
+      const key = line.ctx + '|' + line.t + '|' + line.text;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      remote.push(line);
+      onLine?.(line);
+    }
+
     if(remote.length > MAX_LINES * 3) remote.splice(0, remote.length - MAX_LINES * 3);
-    message.lines.forEach((line) => onLine?.(line));
   } else if(message?.type === 'beat' && isPage) {
     beats.set(message.ctx, {t: message.t, lag: message.lag, born: message.born, seenAt: Date.now()});
   }
