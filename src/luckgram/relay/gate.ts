@@ -18,6 +18,12 @@
 
 /** After a failed handshake a relay is taken for down this long: those waiting are not made to try it. */
 export const RELAY_DOWN_MS = 5000;
+/**
+ * A relay that opened and then hung up without a byte from Telegram (it answers before it has reached
+ * Telegram, luckgram-specs#148) is left alone this long: its handshake would succeed again at once and
+ * win over the routes that work.
+ */
+export const RELAY_SILENT_MS = 30000;
 
 type Waiter = {priority: number, order: number, run: (down: boolean) => void};
 
@@ -32,12 +38,26 @@ export class RelayGate {
   private busy = new Set<string>();
   private queues = new Map<string, Waiter[]>();
   private downUntil = new Map<string, number>();
+  private silentUntil = new Map<string, number>();
   private order = 0;
 
   constructor(private now: () => number = Date.now) {}
 
   public isDown(key: string) {
-    return (this.downUntil.get(key) || 0) > this.now();
+    return Math.max(this.downUntil.get(key) || 0, this.silentUntil.get(key) || 0) > this.now();
+  }
+
+  /**
+   * The relay opened a connection and closed it with nothing from Telegram. A handshake that succeeds
+   * does not lift this: only time, or bytes from Telegram (`heard`).
+   */
+  public silent(key: string) {
+    this.silentUntil.set(key, this.now() + RELAY_SILENT_MS);
+  }
+
+  /** Something came from Telegram through the relay. */
+  public heard(key: string) {
+    this.silentUntil.delete(key);
   }
 
   /**
