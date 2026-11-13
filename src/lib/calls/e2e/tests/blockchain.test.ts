@@ -10,6 +10,10 @@ import {bytesToHex, ensureCryptoReady} from '../crypto';
 import {PrivateKey} from '../keys';
 import {Block, Change, GroupParticipant, GroupState, PERM_ADD_USERS, PERM_REMOVE_USERS, serializeBlockForSigning} from '../tlTypes';
 
+// * Luckgram: three `describe` blocks below make their keys as the file is collected, before any `beforeAll`
+// * runs. libsodium finishes loading on its own time, so on a busy machine those calls came first and the
+// * whole file failed ("crypto_sign_seed_keypair is not a function"). Those blocks wait for it themselves
+// * (vitest waits for an async `describe` while collecting).
 beforeAll(() => ensureCryptoReady());
 
 // Build a block + sign it with the given key.
@@ -292,7 +296,8 @@ describe('Blockchain.applyBlock', () => {
 // WebK-2 regression: the per-change authorization a malicious server must not
 // be able to bypass. Each block below is correctly signed + chained (valid
 // height/prev-hash/signature) — only the AUTHORIZATION is illegitimate.
-describe('Blockchain.applyBlock — per-change authorization (WebK-2)', () => {
+describe('Blockchain.applyBlock — per-change authorization (WebK-2)', async() => {
+  await ensureCryptoReady();
   const aliceId = BigInt(1), bobId = BigInt(2), attackerId = BigInt(666);
   const alice = PrivateKey.fromSeed(new Uint8Array(32).fill(0xa1));
   const bob = PrivateKey.fromSeed(new Uint8Array(32).fill(0xb2));
@@ -408,7 +413,8 @@ describe('Blockchain.applyBlock — per-change authorization (WebK-2)', () => {
 
 // tdlib validate_state mandates the proof OMIT group_state/shared_key exactly
 // when a change rebuilt them, and CARRY them otherwise — not just match-if-present.
-describe('Blockchain.applyBlock — state-proof shape (tdlib validate_state)', () => {
+describe('Blockchain.applyBlock — state-proof shape (tdlib validate_state)', async() => {
+  await ensureCryptoReady();
   const alice = PrivateKey.fromSeed(new Uint8Array(32).fill(0x2a));
   const aliceP = {
     userId: BigInt(1),
@@ -458,7 +464,8 @@ describe('Blockchain.applyBlock — state-proof shape (tdlib validate_state)', (
 // signer outside the prior group state may only produce the self-join block
 // official clients emit — tdlib create_self_add_block / tdesktop makeJoinBlock —
 // and never touch anybody else, whatever external_permissions grants.
-describe('Blockchain.applyBlock — outsider blocks are self-joins only', () => {
+describe('Blockchain.applyBlock — outsider blocks are self-joins only', async() => {
+  await ensureCryptoReady();
   const aliceId = BigInt(1), bobId = BigInt(2), attackerId = BigInt(666), malloryId = BigInt(667);
   const alice = PrivateKey.fromSeed(new Uint8Array(32).fill(0xd1));
   const bob = PrivateKey.fromSeed(new Uint8Array(32).fill(0xd2));

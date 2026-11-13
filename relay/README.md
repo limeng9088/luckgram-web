@@ -76,7 +76,25 @@ GROUP BY kind, outcome
 ```
 
 Outcomes: `closed` (a connection that ended, with its bytes and duration), `error`, `upstream_refused`
-(Telegram did not upgrade), `upstream_unreachable`.
+(Telegram did not upgrade), `upstream_unreachable`, `upstream_timeout` (Telegram did not answer within 6 s),
+`pending_overflow` (see below).
+
+## The browser is answered first
+
+The Worker answers the browser's handshake (101) at once and reaches Telegram meanwhile (`src/bridge.js`,
+luckgram-specs#148): the browser waits for one network path instead of two before it may send, and — a
+browser makes its WebSocket handshakes to one address one after another — its next connection can start that
+much sooner. What the browser sends before Telegram's socket is there is held (at most 4 MiB per connection,
+then the connection is closed with code `4413`) and passed on in order.
+
+So a `101` no longer says that Telegram was reached. When it cannot be (unreachable, no upgrade, no answer
+within 6 s) the browser's socket is closed with code **`4502`** and nothing was passed on. Luckgram Web takes a
+relay that opens and hangs up with nothing received for a route that does not work, leaves it alone for 30 s
+and goes on to the next one (`src/luckgram/relay/routedSocket.ts`). **Deploy the web app with that rule
+before the Worker**: an older build would take the `101` for a working relay and keep coming back to it.
+
+The reverse proxies in `selfhost/` cannot answer first; they keep answering `502` when Telegram is not
+reached, which the web app handles as it always did.
 
 All of a user's traffic through the relay — photos and videos included — passes through the Worker. If
 that becomes too much, remote config `web.relay_media=false` (W3) keeps media connections (the `-1`

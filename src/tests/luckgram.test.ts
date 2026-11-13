@@ -182,7 +182,80 @@ describe('luckgram: the headers of the deployed site', () => {
   test('only the production address may be indexed', () => {
     expect(buildHeadersFile('dev')).toContain('X-Robots-Tag: noindex');
     expect(buildHeadersFile('local')).toContain('X-Robots-Tag: noindex');
-    expect(buildHeadersFile('prod')).not.toContain('X-Robots-Tag');
+    // * for the site's own address, that is; its pages.dev addresses are another matter (specs#167, below)
+    expect(buildHeadersFile('prod').split('\n\n')[0]).not.toContain('X-Robots-Tag');
     expect(buildHeadersFile('prod')).toContain('/luckgram-version\n  Cache-Control: no-store');
+  });
+});
+
+// ---- luckgram-specs#167: the sign-in page is Luckgram's, and says what Luckgram is
+import {luckgramSignInText} from '@/luckgram/brandStrings';
+import {getCanonicalRedirect} from '@/luckgram/canonical';
+
+describe('luckgram: the sign-in screens', () => {
+  const string = (key: string, value: string, langCode: string) => luckgramBrandString({_: 'langPackString', key, value}, langCode).value;
+
+  test('the titles name Luckgram, in Chinese, in English, and in any other language', () => {
+    expect(string('Login.Title', '登录 Telegram', 'zh-hans-raw')).toBe('登录 Luckgram');
+    expect(string('Login.Title', 'Sign in to Telegram', 'en')).toBe('Sign in to Luckgram');
+    expect(string('Login.QR.Title', '扫码登录 Telegram', 'zh-hant')).toBe('扫码登录 Luckgram');
+    expect(string('Login.QR.Title', 'Log in by QR Code', 'en')).toBe('Log in to Luckgram by QR code');
+    expect(string('Login.Title', 'Вход в Telegram', 'ru')).toBe('Вход в Luckgram');
+    // * the bundled English strings, before any pack has said its language
+    expect(string('Login.Title', 'Sign in to Telegram', undefined)).toBe('Sign in to Luckgram');
+  });
+
+  test('they say that the account is a Telegram account, and which apps scan the code', () => {
+    expect(string('Login.StartText', 'x', 'zh-hans')).toContain('Telegram 账号');
+    expect(string('Login.StartText', 'x', 'en')).toContain('your Telegram account');
+    expect(string('Login.QR.Subtitle', 'Scan with Telegram app on your phone', 'en')).toBe('Scan with Telegram or Luckgram on your phone');
+    expect(string('Login.QR.Help1', '在您的手机上打开Telegram', 'zh-hans')).toBe('在手机上打开 Telegram 或 Luckgram');
+    // * in another language the instructions stay as the pack has them
+    expect(string('Login.QR.Help1', 'Откройте Telegram на телефоне', 'ru')).toBe('Откройте Telegram на телефоне');
+  });
+
+  test('no title of the sign-in screens says "Telegram" alone, nothing else is touched', () => {
+    for(const langCode of ['zh-hans', 'en', 'ru', undefined]) {
+      for(const key of ['Login.Title', 'Login.QR.Title']) {
+        expect(luckgramSignInText(key, langCode, 'Sign in to Telegram')).not.toMatch(/Telegram/);
+      }
+    }
+
+    expect(luckgramSignInText('Login.Next', 'en', 'Next')).toBeUndefined();
+    expect(string('Login.Next', 'Next', 'en')).toBe('Next');
+    expect(string('Chat.Title', 'Telegram Web', 'en')).toBe('Luckgram');
+  });
+});
+
+describe('luckgram: one address for the production site', () => {
+  const at = (hostname: string) => ({hostname, pathname: '/', search: '?account=2', hash: '#@durov'});
+
+  test('a production build under a pages.dev address goes to the site, with the same path', () => {
+    expect(getCanonicalRedirect('prod', at('luckgram-web.pages.dev'))).toBe('https://web.luckgram.cc/?account=2#@durov');
+    expect(getCanonicalRedirect('prod', at('3f2a1b0c.luckgram-web.pages.dev'))).toBe('https://web.luckgram.cc/?account=2#@durov');
+  });
+
+  test('the site itself, its backup entrance and development builds stay where they are', () => {
+    for(const hostname of ['web.luckgram.cc', 'lgweb.cat158.com', 'localhost', 'pages.dev.evil.example']) {
+      expect(getCanonicalRedirect('prod', at(hostname))).toBeUndefined();
+    }
+
+    expect(getCanonicalRedirect('dev', at('feat-x.luckgram-web-dev.pages.dev'))).toBeUndefined();
+    expect(getCanonicalRedirect('local', at('luckgram-web.pages.dev'))).toBeUndefined();
+  });
+
+  test('the headers keep every pages.dev address of the production site out of search engines', () => {
+    const prod = buildHeadersFile('prod');
+    expect(prod).toContain('https://:project.pages.dev/*\n  X-Robots-Tag: noindex, nofollow');
+    expect(prod).toContain('https://:deployment.:project.pages.dev/*\n  X-Robots-Tag: noindex, nofollow');
+    // * the site's own address is indexed
+    expect(prod.split('\n\n')[0]).not.toContain('X-Robots-Tag');
+    expect(buildHeadersFile('dev').split('\n\n')[0]).toContain('X-Robots-Tag: noindex, nofollow');
+  });
+
+  test('the description says what the site is', () => {
+    const {description} = luckgramHtmlContext({LUCKGRAM_CHANNEL: 'prod'} as any);
+    expect(description).toMatch(/third-party client/);
+    expect(description).toMatch(/not an official Telegram app/);
   });
 });

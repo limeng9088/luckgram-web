@@ -54,6 +54,18 @@ export function buildHeadersFile(channel) {
 
   if(channel !== 'prod') {
     lines.push('  X-Robots-Tag: noindex, nofollow');
+  } else {
+    // * the production site is also served under Cloudflare's own addresses of the project and of each
+    // * deployment: copies of a sign-in page on a host that is not the site's. They are kept out of search
+    // * engines here, and the page itself leaves for the site's address (src/luckgram/canonical.ts, specs#167)
+    lines.push(
+      '',
+      'https://:project.pages.dev/*',
+      '  X-Robots-Tag: noindex, nofollow',
+      '',
+      'https://:deployment.:project.pages.dev/*',
+      '  X-Robots-Tag: noindex, nofollow'
+    );
   }
 
   lines.push(
