@@ -346,7 +346,7 @@ namespace I18n {
 
     setLuckgramLangCode(langPack.lang_code);
     for(const string of langPack.strings) {
-      strings.set(string.key as LangPackKey, luckgramBrandString(string));
+      strings.set(string.key as LangPackKey, luckgramBrandString(string, langPack.lang_code));
     }
 
     const rtl = langPack.rtl ?? isRTLLangCode(langPack.lang_code);

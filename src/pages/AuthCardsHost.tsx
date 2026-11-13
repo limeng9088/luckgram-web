@@ -1,5 +1,6 @@
 import {JSX, Match, Show, Switch, children, createMemo, lazy, onMount} from 'solid-js';
 
+import {LuckgramAuthBrand, LuckgramAuthNotice} from '@/luckgram/authBrand';
 import Scrollable from '@components/scrollable2';
 import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
 import {IS_MOBILE_SAFARI} from '@environment/userAgent';
@@ -193,6 +194,9 @@ export default function AuthCardsHost(props: AuthFlowOptions & {ref: (host: Auth
           )}
         >
           <div class={classNames(styles.placeholder, styles.placeholderTop)} />
+          {/* Luckgram: the page says whose it is (src/luckgram/authBrand.tsx, luckgram-specs#167) */}
+          <LuckgramAuthBrand />
+          <LuckgramAuthNotice />
           <div class={styles.cardsContainer}>
             <CardsTransition />
           </div>
