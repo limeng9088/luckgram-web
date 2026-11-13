@@ -3,6 +3,7 @@ import Modes from '@config/modes';
 import EventListenerBase from '@helpers/eventListenerBase';
 import {MTConnection} from '@lib/mtproto/transports/transport';
 import ctx from '@environment/ctx';
+import {diag, diagStack} from '@/luckgram/diag';
 
 const TEST_NO_WEBSOCKET = false;
 
@@ -48,6 +49,7 @@ export default class Socket extends EventListenerBase<{
   }
 
   private connect() {
+    diag('ws', this.url.replace('wss://', ''), 'new WebSocket');
     this.ws = new WebSocket(this.url, 'binary');
     this.ws.binaryType = 'arraybuffer';
     this.ws.addEventListener('open', this.handleOpen);
@@ -86,6 +88,7 @@ export default class Socket extends EventListenerBase<{
   }
 
   private handleOpen = () => {
+    diag('ws', this.url.replace('wss://', ''), 'open');
     this.log('opened');
 
     this.clearConnectionTimeout();
@@ -94,11 +97,13 @@ export default class Socket extends EventListenerBase<{
   };
 
   private handleError = (e: any) => {
+    diag('ws', this.url.replace('wss://', ''), 'error', e?.message || e?.type, 'readyState=' + this.ws?.readyState);
     this.log.error('handleError', e);
     this.close();
   };
 
   private handleClose = (e?: CloseEvent) => {
+    diag('ws', this.url.replace('wss://', ''), 'close', e ? 'native code=' + e.code + ' clean=' + e.wasClean : 'by us', 'by', e ? '' : diagStack(2, 5));
     this.log('closed', e/* , this.pending, this.ws.bufferedAmount */);
 
     this.removeListeners();

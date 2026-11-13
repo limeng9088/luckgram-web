@@ -7,6 +7,7 @@ import {LUCKGRAM_IS_DEV} from '@/luckgram/config';
 import {watchForLuckgramUpdate} from '@/luckgram/update';
 import {initRoutePage} from '@/luckgram/relay/page';
 import {connection} from '@/luckgram/relay/appConnection';
+import {diag} from '@/luckgram/diag';
 import './luckgram.scss';
 
 function mountDevBadge() {
@@ -18,6 +19,7 @@ function mountDevBadge() {
 }
 
 export function initLuckgram() {
+  diag('luckgram', 'initLuckgram');
   if(LUCKGRAM_IS_DEV) mountDevBadge();
   watchForLuckgramUpdate();
   initRoutePage(connection);

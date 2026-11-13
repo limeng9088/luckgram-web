@@ -46,6 +46,7 @@ import TempAuthKeys, {StoredTempAuthKey} from '@lib/mtproto/tempAuthKeys';
  */
 import globalRootScope from '@lib/rootScope';
 import RepayRequestHandler from '@appManagers/utils/repayRequestHandler';
+import {diag, diagStack} from '@/luckgram/diag';
 
 const PREMIUM_FILE_NETWORKERS_COUNT = 6;
 const REGULAR_FILE_NETWORKERS_COUNT = 3;
@@ -211,6 +212,7 @@ export class ApiManager extends ApiManagerMethods {
     }
 
     this.log('changing transport from', oldTransportType, 'to', transportType);
+    diag('apiManager', 'account', this.getAccountNumber(), 'changing transport', oldTransportType, '->', transportType);
 
     const oldObject = this.cachedNetworkers[oldTransportType];
     const newObject = this.cachedNetworkers[transportType];

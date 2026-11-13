@@ -20,5 +20,7 @@ export async function preventCrossTabDynamicImportDeadlock() {
   // module deadlock cannot arise. Skip the rAF wait so the dynamic imports
   // proceed immediately instead of blocking the first paint.
   if(IS_PREVIEW) return;
+  // diagnostics for luckgram-specs#146 only: ?lgnoraf=1 skips the wait
+  if(location.search.includes('lgnoraf=1')) return;
   await fastRafPromise();
 }

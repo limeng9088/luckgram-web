@@ -28,6 +28,7 @@ import {MTAuthKey} from '@lib/mtproto/authKey';
 import safeAssign from '@helpers/object/safeAssign';
 import getTransportError from '@lib/mtproto/transports/getTransportError';
 import {chooseProbedTransport} from '@/luckgram/relay/routes';
+import {diag, diagStack} from '@/luckgram/diag';
 
 type AuthOptions = {
   dcId: number,
@@ -618,12 +619,15 @@ export class Authorizer {
       // * the WebSocket is the one that will come — the rule the transport controller itself goes by
       // * (`waitForWebSocket`); upstream took HTTPS here and kept it for good (luckgram-specs#146).
       this.transportType = chooseProbedTransport({websocket, https});
+      diag('authorizer', 'will use transport', this.transportType, {websocket, https});
       this.log('will use transport:', this.transportType);
     });
   };
 
   private async _auth(dcId: DcId) {
+    diag('authorizer', '_auth dc', dcId, 'waiting for the transport type');
     await this.getTransportType();
+    diag('authorizer', '_auth dc', dcId, 'transport', this.transportType);
 
     let error: ApiError;
     let retries = 0;

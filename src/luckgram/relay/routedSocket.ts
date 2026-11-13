@@ -17,6 +17,9 @@ import ctx from '@environment/ctx';
 import {MTConnection, MTConnectionConstructable, MTConnectionEvents} from '@lib/mtproto/transports/transport';
 import {ATTEMPT_TIMEOUT, RouteCandidate, RouteConfig, getRouteCandidates, getStartDelays} from '@/luckgram/relay/routes';
 import {GateTicket, RelayGate} from '@/luckgram/relay/gate';
+import {diag, diagStack} from '@/luckgram/diag';
+
+let routedId = 0;
 import {RouteMessage, RouteStatus, emptyRouteTraffic, getDefaultRouteConfig, openRouteChannel, sanitizeRouteConfig} from '@/luckgram/relay/state';
 
 const CONFIG_WAIT = 400;
@@ -73,6 +76,7 @@ export function getRouteTraffic() {
 
 /** The settings as the page sent them (and, in tests, as a test sets them). */
 export function applyRouteConfig(value: any) {
+  diag('route', 'config', value);
   const modeChanged = config.mode !== value?.mode;
   config = sanitizeRouteConfig(value);
   postStatus({});
@@ -83,6 +87,7 @@ export function applyRouteConfig(value: any) {
 
 function init() {
   if(configReady) return configReady;
+  diag('route', 'init: asking the page for the settings');
 
   channel = openRouteChannel();
   if(!channel) return configReady = Promise.resolve();
@@ -124,8 +129,11 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
     private isMedia: boolean;
     private counter: {connections: number, up: number, down: number};
 
+    private rid = ++routedId;
+
     constructor(private dcId: number, private url: string, private logSuffix: string) {
       super();
+      diag('route', '#' + this.rid, 'new', 'account=' + account, 'dc' + dcId + (logSuffix || ''), url.replace('wss://', ''), 'by', diagStack(2, 6));
       // * the status the page shows is the main connection's, not a download's
       this.isMain = !logSuffix;
       this.isMedia = !!logSuffix;
@@ -134,6 +142,7 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
     }
 
     private start() {
+      diag('route', '#' + this.rid, 'start; closed=' + this.closed, 'mode=' + config.mode, 'preferred=' + config.preferred, 'relays=' + config.relays.join(','));
       if(this.closed) return;
 
       const candidates = getRouteCandidates(this.url, config);
@@ -143,17 +152,20 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
 
       // * a candidate that did not open: the next one need not wait for its turn; none left — nothing works
       const onFailed = () => {
+        diag('route', '#' + this.rid, 'candidate failed; failed=' + (failed + 1) + '/' + candidates.length, 'opened=' + this.opened, 'closed=' + this.closed);
         if(this.opened || this.closed) return;
         if(++failed >= candidates.length) this.finish(true);
         else startNext();
       };
 
       const connectTo = (candidate: RouteCandidate, ticket?: GateTicket) => {
+        diag('route', '#' + this.rid, 'socket create', candidate.id);
         const connection = new Connection(this.dcId, candidate.url, this.logSuffix);
         this.attempts.set(connection, candidate);
         this.syncDeadline();
 
         connection.addEventListener('open', () => {
+          diag('route', '#' + this.rid, 'socket open', candidate.id, 'stale=' + (this.closed || this.opened));
           ticket?.done(true);
           if(this.closed || this.opened) {
             connection.close();
@@ -186,6 +198,7 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
         });
 
         connection.addEventListener('close', () => {
+          diag('route', '#' + this.rid, 'socket close', candidate.id, 'winner=' + (this.winner === connection), 'pending=' + this.attempts.has(connection));
           if(this.winner === connection) {
             this.finish(false);
             return;
@@ -212,8 +225,10 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
 
         // * created only when no other connection is in the middle of its handshake with this relay
         let ran = false;
+        diag('route', '#' + this.rid, 'gate enter', candidate.id, 'priority=' + getGatePriority(account, this.isMedia));
         const ticket = gate.enter(candidate.id, getGatePriority(account, this.isMedia), (down, ticket) => {
           ran = true;
+          diag('route', '#' + this.rid, 'gate turn', candidate.id, 'down=' + down);
           this.tickets.delete(candidate);
           if(this.closed || this.opened) ticket.cancel();
           else if(down) onFailed();
@@ -257,6 +272,7 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
         this.deadlineSince = Date.now();
         this.deadline = ctx.setTimeout(() => {
           this.deadline = undefined;
+          diag('route', '#' + this.rid, 'deadline fired');
           if(!this.opened && !this.closed) this.finish(true);
         }, Math.max(0, this.budget));
       }
@@ -277,6 +293,7 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
 
     /** @param nothingWorked no address opened in this attempt */
     private finish(nothingWorked: boolean) {
+      diag('route', '#' + this.rid, 'finish nothingWorked=' + nothingWorked, 'opened=' + this.opened, 'alreadyClosed=' + this.closed);
       if(this.closed) return;
       this.closed = true;
       live.delete(this);
@@ -304,6 +321,7 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
     };
 
     public close() {
+      diag('route', '#' + this.rid, 'close() opened=' + this.opened, 'by', diagStack(2, 6));
       const winner = this.winner;
       if(winner && !this.closed) {
         // * its close event finishes this connection, as it does for upstream's socket

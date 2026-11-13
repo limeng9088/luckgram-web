@@ -68,6 +68,7 @@ import {preventCrossTabDynamicImportDeadlock} from '@helpers/preventDeadlock';
 import appChatBackground from '@components/chat/bubbles/chatBackground';
 import {initLuckgram} from '@/luckgram';
 import {followBrowserLanguage} from '@/luckgram/language';
+import {diag, diagStack} from '@/luckgram/diag';
 
 // import commonStateStorage from '@lib/commonStateStorage';
 // import { STATE_INIT } from '@config/state';
@@ -450,6 +451,7 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   setRootClasses();
   if(Modes.test) mountTestDcBadge();
   initLuckgram();
+  diag('boot', 'DOMContentLoaded: initLuckgram done');
 
   // ?popups=1 — the popup sandbox: every popup, opened by click with mock data and no session.
   // It has to take over here, before the session is restored and the auth flow starts.
@@ -478,8 +480,10 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   // has loaded yet then
   setHotReloadGuardLoader(() => import('./pages/bootstrapIm').then(({importAppTopLevel}) => importAppTopLevel()));
 
+  diag('boot', 'managers proxied');
   rootScope.managers = getProxiedManagers();
   await checkLastActiveAccountFromTMe();
+  diag('boot', 'checkLastActiveAccountFromTMe done');
 
   if(IS_INSTALL_PROMPT_SUPPORTED) {
     cacheInstallPrompt();
@@ -488,6 +492,7 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   // Make sure this is before checking if the app is locked.
   // If this value is cached, and a different tab locks/unlocks, we'll see the wrong state of the app.
   await preventCrossTabDynamicImportDeadlock();
+  diag('boot', 'preventCrossTabDynamicImportDeadlock done');
 
   await PasscodeLockScreenController.waitForUnlock(async() => {
     const settings = await commonStateStorage.get('settings');
@@ -497,7 +502,9 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
     appChatBackground.attach();
     appChatBackground.setBackground({transition: 'instant'});
 
+    diag('boot', 'unlock: settings/theme/background done');
     await I18n.getCacheLangPackAndApply();
+    diag('boot', 'unlock: lang pack applied');
 
     if(IS_BETA) import('./pages/bootstrapIm'); // cache it
     // const settings = await commonStateStorage.get('settings');
@@ -513,7 +520,9 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   // * (4) exit if not updated
 
   // * (1)
+  diag('boot', 'waitForUnlock done; loading states');
   const allStates = await apiManagerProxy.loadAllStates();
+  diag('boot', 'allStates loaded');
   const stateResult = allStates[getCurrentAccount()];
 
   // console.log(stateResult);
@@ -524,6 +533,7 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   // * (2)
   singleInstance.addEventListener('deactivated', onInstanceDeactivated);
   await singleInstance.start();
+  diag('boot', 'singleInstance started', singleInstance.deactivatedReason || '');
   console.timeLog(TIME_LABEL, 'singleInstance started');
 
   const sendAllStatesPromise = singleInstance.deactivatedReason !== 'version' && apiManagerProxy.sendAllStates(allStates);
@@ -533,6 +543,7 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
 
   // * (3)
   await sendAllStatesPromise;
+  diag('boot', 'sent all states (1)');
   console.timeLog(TIME_LABEL, 'sent all states (1)');
 
   const setUnreadMessagesText = () => {
@@ -546,6 +557,7 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   };
 
   const langPack = await I18n.getCacheLangPackAndApply();
+  diag('boot', 'lang pack', langPack?.lang_code);
   console.timeLog(TIME_LABEL, 'await I18n.getCacheLangPack()');
   const [appSettings] = useAppSettings();
   I18n.setTimeFormat(appSettings.timeFormat);
@@ -558,8 +570,10 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
   }
 
   apiManagerProxy.onLanguageChange(I18n.getLastRequestedLangCode());
+  diag('boot', 'sending all states (2)');
   await apiManagerProxy.sendAllStates(allStates);
 
+  diag('boot', 'sent all states (2)');
   console.timeLog(TIME_LABEL, 'sent all states (2)');
 
   const [, setHasFoldersSidebar] = useHasFoldersSidebar();

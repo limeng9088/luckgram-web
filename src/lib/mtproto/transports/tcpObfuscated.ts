@@ -11,6 +11,7 @@ import transportController from '@lib/mtproto/transports/controller';
 import bytesToHex from '@helpers/bytes/bytesToHex';
 // import networkStats from '@lib/mtproto/networkStats';
 import ctx from '@environment/ctx';
+import {diag, diagStack} from '@/luckgram/diag';
 
 export default class TcpObfuscated implements MTTransport {
   private codec = abridgedPacketCodec;
@@ -102,6 +103,7 @@ export default class TcpObfuscated implements MTTransport {
   };
 
   private onClose = () => {
+    diag('tcp', 'dc' + this.dcId + this.logSuffix, 'onClose autoReconnect=' + this.autoReconnect, 'networker=' + !!this.networker);
     this.clear();
 
     let needTimeout: number, retryAt: number;
@@ -156,6 +158,7 @@ export default class TcpObfuscated implements MTTransport {
     }
 
     this.log('trying to reconnect...');
+    diag('tcp', 'dc' + this.dcId + this.logSuffix, 'reconnect');
     this.lastCloseTime = Date.now();
 
     if(!this.networker) {
@@ -177,6 +180,7 @@ export default class TcpObfuscated implements MTTransport {
   }
 
   public destroy() {
+    diag('tcp', 'dc' + this.dcId + this.logSuffix, 'destroy by', diagStack());
     this.setAutoReconnect(false);
     this.close();
 
