@@ -4,16 +4,16 @@ import {MOUNT_CLASS_TO} from '@config/debug';
 import type {AppInstance} from '@lib/singleInstance';
 import type {UserAuth} from '@appManagers/constants';
 import LocalStorageController from '@lib/localStorage';
-import {StoredAccountSessionData} from '@lib/accounts/types';
+import {ActiveAccountNumber, StoredAccountSessionData} from '@lib/accounts/types';
+import {ACCOUNT_NUMBERS} from '@lib/accounts/constants';
 
 
-type StorageValues = {
+// * Luckgram (W4): a key per account slot, as many as there are slots (upstream lists account1…account4)
+type AccountStorageValues = {[key in `account${ActiveAccountNumber}`]: StoredAccountSessionData};
+
+type StorageValues = AccountStorageValues & {
   state_id: number,
 
-  account1: StoredAccountSessionData,
-  account2: StoredAccountSessionData,
-  account3: StoredAccountSessionData,
-  account4: StoredAccountSessionData,
 
   // @deprecated the passcode key is handed over in window.sessionStorage now
   // (@lib/passcode/keyHandoff) — kept only so old, on-disk values can be purged
@@ -64,10 +64,7 @@ type DeprecatedStorageValues = {
 };
 
 const sessionStorage = new LocalStorageController<StorageValues & DeprecatedStorageValues>([
-  'account1',
-  'account2',
-  'account3',
-  'account4',
+  ...ACCOUNT_NUMBERS.map((accountNumber) => `account${accountNumber}` as const),
   'auth_key_fingerprint',
   'user_auth',
   'dc'

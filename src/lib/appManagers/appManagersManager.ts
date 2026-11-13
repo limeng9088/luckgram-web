@@ -10,6 +10,7 @@ import MTProtoMessagePort from '@lib/mainWorker/mainMessagePort';
 import {AppStoragesManager} from '@appManagers/appStoragesManager';
 import createManagers from '@appManagers/createManagers';
 import {ActiveAccountNumber} from '@lib/accounts/types';
+import {ACCOUNT_NUMBERS} from '@lib/accounts/constants';
 import AppStateManager from '@appManagers/appStateManager';
 import rootScope from '@lib/rootScope';
 import AccountController from '@lib/accounts/accountController';
@@ -25,7 +26,8 @@ type Managers = Awaited<ReturnType<typeof createManagers>>;
 // for testing cases without video streaming
 const CAN_USE_SERVICE_WORKER = !Modes.noServiceWorker;
 
-type ManagersByAccount = Record<ActiveAccountNumber, Managers>;
+// * Luckgram (W4): only the slots someone is signed in to, or works in, have managers (see createManagers)
+type ManagersByAccount = Partial<Record<ActiveAccountNumber, Managers>>;
 type StateManagersByAccount = Record<ActiveAccountNumber, AppStateManager>;
 
 type ThreadedSharedWorker = {
@@ -72,12 +74,9 @@ export class AppManagersManager {
       });
     }
 
-    this.stateManagersByAccount = {
-      1: new AppStateManager(1),
-      2: new AppStateManager(2),
-      3: new AppStateManager(3),
-      4: new AppStateManager(4)
-    };
+    this.stateManagersByAccount = Object.fromEntries(
+      ACCOUNT_NUMBERS.map((accountNumber) => [accountNumber, new AppStateManager(accountNumber)])
+    ) as StateManagersByAccount;
 
     const managersByAccountAsArray = Object.values(this.stateManagersByAccount)
 
@@ -108,10 +107,11 @@ export class AppManagersManager {
           return results.some((result) => result instanceof Promise) ? Promise.all(results) : results;
         }
 
-        const managers = managersByAccount[accountNumber];
-        const manager = managers[name as keyof Managers];
-        // @ts-ignore
-        return manager[method](...args);
+        return callbackify(this.getManagers(accountNumber), (managers) => {
+          const manager = managers[name as keyof Managers];
+          // @ts-ignore
+          return manager[method](...args);
+        });
       });
     });
 
@@ -158,9 +158,9 @@ export class AppManagersManager {
       });
       if(existing) {
         const [otherAccountNumber] = existing;
-        const managersByAccount = await this.getManagersByAccount();
+        const managers = await this.getManagers(accountNumber);
         // * the slots after the one signed out move down by one
-        managersByAccount[accountNumber].apiManager.logOut(
+        managers.apiManager.logOut(
           (otherAccountNumber > accountNumber ? otherAccountNumber - 1 : otherAccountNumber) as ActiveAccountNumber
         );
       }
@@ -176,8 +176,15 @@ export class AppManagersManager {
     });
   }
 
-  private async createManagers() {
-    const promises = ([1, 2, 3, 4] as ActiveAccountNumber[]).map(async(accountNumber) => {
+  // * Luckgram (luckgram-specs#140, W4). Upstream makes the managers of every slot as the worker starts, and
+  // * each set connects to Telegram and opens its databases whether anyone is signed in there or not: fine
+  // * with 4 slots, not with 20. Here a slot gets its managers when it has an account — known from the state
+  // * its tab sends — or when someone asks for them: the tab that shows the slot, to sign in there.
+  private createdManagers: ManagersByAccount = {};
+  private managersPromises: Partial<Record<ActiveAccountNumber, Promise<Managers>>> = {};
+
+  private createManagersFor(accountNumber: ActiveAccountNumber) {
+    return this.managersPromises[accountNumber] ??= (async() => {
       const stateManager = this.stateManagersByAccount[accountNumber]
       const appStoragesManager = new AppStoragesManager(accountNumber, stateManager.resetStoragesPromise);
 
@@ -198,16 +205,27 @@ export class AppManagersManager {
         stateManager.userId
       );
 
-      return [
-        accountNumber,
-        managers
-      ] as const;
-    });
+      return this.createdManagers[accountNumber] = managers;
+    })();
+  }
 
-    const accountNumberToManagersPairs = await Promise.all(promises);
-    this.managersByAccount = Object.fromEntries(accountNumberToManagersPairs) as ManagersByAccount;
+  /** The managers of one slot; made now if the slot had none. */
+  public getManagers(accountNumber: ActiveAccountNumber): MaybePromise<Managers> {
+    return this.createdManagers[accountNumber] ?? this.createManagersFor(accountNumber);
+  }
 
-    return this.managersByAccount;
+  private async createManagers() {
+    await Promise.all(ACCOUNT_NUMBERS.map(async(accountNumber) => {
+      const stateManager = this.stateManagersByAccount[accountNumber];
+      // * the slot's state has come from a tab: it says whether an account is signed in there
+      await stateManager.resetStoragesPromise;
+      if(stateManager.userId || this.managersPromises[accountNumber]) {
+        await this.createManagersFor(accountNumber);
+      }
+    }));
+
+    // * the same object the slots made later are added to
+    return this.createdManagers;
   }
 
   public getManagersByAccount() {
@@ -240,45 +258,45 @@ export class AppManagersManager {
       this.serviceMessagePort = new ServiceMessagePort();
       this.serviceMessagePort.addMultipleEventsListeners({
         requestFilePart: (payload) => {
-          return callbackify(appManagersManager.getManagersByAccount(), (managersByAccount) => {
+          return callbackify(appManagersManager.getManagers(payload.accountNumber), (managers) => {
             const {docId, dcId, offset, limit, accountNumber} = payload;
-            return managersByAccount[accountNumber].appDocsManager.requestDocPart(docId, dcId, offset, limit);
+            return managers.appDocsManager.requestDocPart(docId, dcId, offset, limit);
           });
         },
         cancelFilePartRequests: ({docId, accountNumber}) => {
-          return callbackify(appManagersManager.getManagersByAccount(), (managersByAccount) => {
-            return managersByAccount[accountNumber].appDocsManager.cancelDocPartsRequests(docId);
+          return callbackify(appManagersManager.getManagers(accountNumber), (managers) => {
+            return managers.appDocsManager.cancelDocPartsRequests(docId);
           });
         },
         requestRtmpState({call, accountNumber}) {
-          return callbackify(appManagersManager.getManagersByAccount(), (managersByAccount) => {
-            return managersByAccount[accountNumber].appGroupCallsManager.fetchRtmpState(call);
+          return callbackify(appManagersManager.getManagers(accountNumber), (managers) => {
+            return managers.appGroupCallsManager.fetchRtmpState(call);
           });
         },
         requestRtmpPart(payload) {
-          return callbackify(appManagersManager.getManagersByAccount(), (managersByAccount) => {
+          return callbackify(appManagersManager.getManagers(payload.accountNumber), (managers) => {
             const {request, dcId, accountNumber} = payload;
-            return managersByAccount[accountNumber].appGroupCallsManager.fetchRtmpPart(request, dcId);
+            return managers.appGroupCallsManager.fetchRtmpPart(request, dcId);
           });
         },
         requestDoc(payload) {
-          return callbackify(appManagersManager.getManagersByAccount(), (managersByAccount) => {
+          return callbackify(appManagersManager.getManagers(payload.accountNumber), (managers) => {
             const {docId, accountNumber} = payload;
-            return managersByAccount[accountNumber].appDocsManager.getDoc(docId);
+            return managers.appDocsManager.getDoc(docId);
           });
         },
         downloadDoc(payload) {
-          return callbackify(appManagersManager.getManagersByAccount(), (managersByAccount) => {
+          return callbackify(appManagersManager.getManagers(payload.accountNumber), (managers) => {
             const {docId, accountNumber} = payload;
-            const appDocsManager = managersByAccount[accountNumber].appDocsManager;
+            const appDocsManager = managers.appDocsManager;
             const doc = appDocsManager.getDoc(docId);
             return appDocsManager.downloadDoc(doc);
           });
         },
         requestAltDocsByDoc(payload) {
-          return callbackify(appManagersManager.getManagersByAccount(), (managersByAccount) => {
+          return callbackify(appManagersManager.getManagers(payload.accountNumber), (managers) => {
             const {docId, accountNumber} = payload;
-            const {appDocsManager} = managersByAccount[accountNumber];
+            const {appDocsManager} = managers;
             return appDocsManager.getAltDocsByDocument(docId);
           });
         },

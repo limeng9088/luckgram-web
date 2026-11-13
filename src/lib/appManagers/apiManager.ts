@@ -34,6 +34,7 @@ import {AppStoragesManager} from '@appManagers/appStoragesManager';
 import commonStateStorage from '@lib/commonStateStorage';
 import CacheStorageController from '@lib/files/cacheStorage';
 import {ActiveAccountNumber} from '@lib/accounts/types';
+import {ACCOUNT_NUMBERS} from '@lib/accounts/constants';
 import makeError from '@helpers/makeError';
 import EncryptedStorageLayer from '@lib/encryptedStorageLayer';
 import {getCommonDatabaseState} from '@config/databases/state';
@@ -401,7 +402,7 @@ export class ApiManager extends ApiManagerMethods {
   }
 
   public static async forceLogOutAll() {
-    const clearAllStoresPromises = ([1, 2, 3, 4] as ActiveAccountNumber[])
+    const clearAllStoresPromises = ACCOUNT_NUMBERS
     .map(accountNumber => AppStoragesManager.clearAllStoresForAccount(accountNumber));
 
     await Promise.all([

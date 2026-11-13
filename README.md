@@ -31,7 +31,10 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   `src/lib/appManagers/apiUpdatesManager.ts` (and its test `src/tests/changelogDelivery.test.ts`), `src/components/sidebarLeft/index.ts`,
   `src/components/sidebarLeft/tabs/settings.tsx`, `src/components/sidebarLeft/tabs/experimental.tsx`,
   `src/lib/mtproto/dcConfigurator.ts`, `src/lib/mtproto/transports/controller.ts`, `src/lib/mtproto/authorizer.ts`,
-  `src/lib/appManagers/createManagers.ts`, `scripts/import-graph.mjs`.
+  `src/lib/appManagers/createManagers.ts`, `scripts/import-graph.mjs`; for the 20 account slots (W4): `src/lib/accounts/constants.ts`,
+  `types.d.ts`, `getValidatedAccount.ts`, `accountController.ts`, `src/lib/sessionStorage.ts`,
+  `src/lib/appManagers/appManagersManager.ts` (a slot gets its managers only when it has an account or is worked in),
+  `apiManager.ts`, `appStoragesManager.ts`, `utils/state/loadState.ts`, `src/lib/apiManagerProxy.ts`, `src/lib/mainWorker/index.worker.ts`, `src/index.ts`.
   (`experimental.tsx` is back to upstream since W3 moved the connection mode to "Luckgram 功能".) `public/` (upstream's last committed bundle and its
   static files) is left as upstream has it; Luckgram's icons and manifest are laid over it when the site is
   assembled.

@@ -76,13 +76,13 @@ import {makeMediaSize} from '@helpers/mediaSize';
 import ReactionElement from '@components/chat/reaction';
 import setBlankToAnchor from '@lib/richTextProcessor/setBlankToAnchor';
 import AccountController from '@lib/accounts/accountController';
-import {MAX_ACCOUNTS, MAX_ACCOUNTS_FREE} from '@lib/accounts/constants';
+import {MAX_ACCOUNTS} from '@lib/accounts/constants';
+import {luckgramAccountsLimitText, luckgramScrollAccountItems} from '@/luckgram/accounts';
 import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
 import {createProxiedManagersForAccount} from '@lib/getProxiedManagers';
 import limitSymbols from '@helpers/string/limitSymbols';
 import filterAsync from '@helpers/array/filterAsync';
 import pause from '@helpers/schedulers/pause';
-import showAccountsLimitPopup from '@components/sidebarLeft/accountsLimitPopup';
 import {changeAccount} from '@lib/accounts/changeAccount';
 import switchAccount from '@lib/accounts/switchAccount';
 import addAccount from '@lib/accounts/addAccount';
@@ -95,7 +95,7 @@ import showSliderPopup from '@components/sliderPopup';
 import {AppEditFolderTab} from '@components/solidJsTabs/tabs';
 import {addShortcutListener} from '@helpers/shortcutListener';
 import tsNow from '@helpers/tsNow';
-import {toastNew} from '@components/toast';
+import {toast, toastNew} from '@components/toast';
 import DeferredIsUsingPasscode from '@lib/passcode/deferredIsUsingPasscode';
 import createLockButton from '@components/sidebarLeft/lockButton';
 import createSubmenuTrigger, {CreateSubmenuArgs} from '@components/createSubmenuTrigger';
@@ -757,11 +757,8 @@ export class AppSidebarLeft extends SidebarSlider {
     const menuButtons: (ButtonMenuItemOptions & {verify?: () => boolean | Promise<boolean>})[] = [{
       icon: 'plus',
       text: 'MultiAccount.AddAccount',
-      onClick: this.addAccount,
-      verify: async() => {
-        const totalAccounts = await AccountController.getTotalAccounts();
-        return totalAccounts < MAX_ACCOUNTS && !!(await AccountController.getFreeAccountNumber());
-      }
+      // * Luckgram (W4): always there; at the limit a click says so (upstream hides it, and offers Premium at 3)
+      onClick: this.addAccount
     }, newSubmenu, {
       icon: 'savedmessages',
       text: 'SavedMessages',
@@ -817,6 +814,7 @@ export class AppSidebarLeft extends SidebarSlider {
 
     const filteredButtons = menuButtons.filter(Boolean);
     const filteredButtonsSliced = filteredButtons.slice();
+    let openedAccountButtons: typeof filteredButtons = [];
     const buttonMenuToggle = ButtonMenuToggle({
       direction: 'bottom-right',
       buttons: filteredButtons,
@@ -873,7 +871,7 @@ export class AppSidebarLeft extends SidebarSlider {
           AccountController.getAccountNumbers(),
           uiNotificationsManager.getNotificationsCountForAllAccounts()
         ]);
-        const accountButtons: typeof buttons = [];
+        const accountButtons: typeof buttons = openedAccountButtons = [];
         for(const accountNumber of accountNumbers) {
           if(accountNumber === getCurrentAccount()) {
             const user = await managers.appUsersManager.getSelf();
@@ -929,6 +927,8 @@ export class AppSidebarLeft extends SidebarSlider {
         filteredButtons.splice(0, filteredButtons.length, ...buttons);
       },
       onOpen: () => {
+        // * Luckgram (W4): with many accounts their items scroll, the rest of the menu stays in view
+        luckgramScrollAccountItems(openedAccountButtons.map((button) => button.element));
         moreSubmenu.onOpen();
         newSubmenu.onOpen();
         btnArchive.element?.append(this.archivedCount);
@@ -1980,12 +1980,9 @@ export class AppSidebarLeft extends SidebarSlider {
       AccountController.getTotalAccounts(),
       AccountController.getFreeAccountNumber()
     ]);
-    if(totalAccounts >= MAX_ACCOUNTS || !accountNumber) return;
-
-    const hasSomeonePremium = await apiManagerProxy.hasSomeonePremium();
-
-    if(totalAccounts === MAX_ACCOUNTS_FREE && !hasSomeonePremium) {
-      showAccountsLimitPopup();
+    // * Luckgram (W4): the limit is the same with Telegram Premium and without, so there is nothing to offer
+    if(totalAccounts >= MAX_ACCOUNTS || !accountNumber) {
+      toast(luckgramAccountsLimitText());
       return;
     }
 

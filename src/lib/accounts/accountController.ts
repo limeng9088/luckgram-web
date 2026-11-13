@@ -10,12 +10,11 @@ import StaticUtilityClass from '@lib/staticUtilityClass';
 
 import {AccountSessionData, ActiveAccountNumber, SessionUserFields, StoredAccountSessionData} from '@lib/accounts/types';
 import getAuthKeyFingerprint from '@lib/accounts/authKeyFingerprint';
-import {DC_IDS, MAX_ACCOUNTS} from '@lib/accounts/constants';
+import {ACCOUNT_NUMBERS, DC_IDS, MAX_ACCOUNTS} from '@lib/accounts/constants';
 import bytesToHex from '@helpers/bytes/bytesToHex';
 import randomize from '@helpers/array/randomize';
 import noop from '@helpers/noop';
 
-const ACCOUNT_NUMBERS: ActiveAccountNumber[] = [1, 2, 3, 4];
 // * the first account's keys, by DC, as they are kept for Web A beside its slot as well, without a passcode only
 const LEGACY_KEYS = DC_IDS.map((dcId) => [`dc${dcId}_auth_key`, `dc${dcId}_server_salt`] as const);
 const SESSION_USER_FIELDS: (keyof SessionUserFields)[] = ['firstName', 'lastName', 'phone', 'color', 'isPremium', 'emojiStatusId'];

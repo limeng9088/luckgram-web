@@ -217,8 +217,8 @@ port.addMultipleEventsListeners({
 
   // * the snapshots travel the same port ahead of the reply, so they are in place when it resolves
   mirrorAll: ({accountNumber}, source) => {
-    return callbackify(appManagersManager.getManagersByAccount(), (managers) => {
-      mirrorAccountTo(managers[accountNumber], source);
+    return callbackify(appManagersManager.getManagers(accountNumber), (managers) => {
+      mirrorAccountTo(managers, source);
     });
   },
 

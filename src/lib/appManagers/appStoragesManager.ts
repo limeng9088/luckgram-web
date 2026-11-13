@@ -1,5 +1,5 @@
 import {getDatabaseState} from '@config/databases/state';
-import {MAX_ACCOUNTS} from '@lib/accounts/constants';
+import {ACCOUNT_NUMBERS, MAX_ACCOUNTS} from '@lib/accounts/constants';
 import AppStorage from '@lib/storage';
 import {ResetStoragesPromise} from '@appManagers/appStateManager';
 import {AppManager} from '@appManagers/manager';
@@ -77,7 +77,7 @@ export class AppStoragesManager extends AppManager {
    * It's more for the case when there was a passcode activated so we don't leave the encrypted data there
    */
   public static async clearSessionStores() {
-    const promises = ([/* 1, */2, 3, 4] as ActiveAccountNumber[]).map(async(accountNumber) => {
+    const promises = ACCOUNT_NUMBERS.slice(1).map(async(accountNumber) => {
       const storage = new AppStorage(getDatabaseState(accountNumber), 'session');
       await storage.clear();
     });

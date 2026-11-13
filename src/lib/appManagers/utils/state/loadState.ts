@@ -10,6 +10,7 @@ import {recordPromiseBound} from '@helpers/recordPromise';
 import {StoragesResults} from '@appManagers/utils/storages/loadStorages';
 import {LogTypes, logger} from '@lib/logger';
 import {AccountSessionData, ActiveAccountNumber} from '@lib/accounts/types';
+import {ACCOUNT_NUMBERS} from '@lib/accounts/constants';
 import StateStorage from '@lib/stateStorage';
 import AccountController from '@lib/accounts/accountController';
 import getAuthKeyFingerprint from '@lib/accounts/authKeyFingerprint';
@@ -540,7 +541,7 @@ async function applyBuildVersionToStorage() {
 async function loadStateForAllAccounts() {
   if(TEST_MULTI_MIGRATION) {
     // * clear all storages to test migration
-    await Promise.all([1, 2, 3, 4].map(async(i) => {
+    await Promise.all(ACCOUNT_NUMBERS.map(async(i) => {
       const storages = createStorages(i as ActiveAccountNumber);
       for(const key in storages) {
         await storages[key as keyof typeof storages].clear();
@@ -557,11 +558,8 @@ async function loadStateForAllAccounts() {
 
   let stateForFirstAccount: LoadStateResult;
 
-  const restPromise = Promise.all([
-    loadStateForAccount(2),
-    loadStateForAccount(3),
-    loadStateForAccount(4)
-  ]);
+  const restAccountNumbers = ACCOUNT_NUMBERS.slice(1);
+  const restPromise = Promise.all(restAccountNumbers.map((accountNumber) => loadStateForAccount(accountNumber)));
 
   if(!hasMultiAccount) {
     stateForFirstAccount = await loadOldState();
@@ -588,12 +586,10 @@ async function loadStateForAllAccounts() {
     console.log('loadStateForAllAccounts time', performance.now() - perf);
   }
 
-  return {
-    1: stateForFirstAccount,
-    2: rest[0],
-    3: rest[1],
-    4: rest[2]
-  };
+  return Object.fromEntries([
+    [1, stateForFirstAccount],
+    ...restAccountNumbers.map((accountNumber, index) => [accountNumber, rest[index]])
+  ]) as Record<ActiveAccountNumber, LoadStateResult>;
 }
 
 let promise: ReturnType<typeof loadStateForAllAccounts>;
