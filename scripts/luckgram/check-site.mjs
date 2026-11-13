@@ -5,7 +5,7 @@
  *
  *  - the bundle carries the credentials of this build, not the pair upstream keeps in .env;
  *  - the page, the manifests and the notification code name Luckgram, not "Telegram Web";
- *  - a development build is marked noindex, a production build is not;
+ *  - a development build is marked noindex, a production build is not (but under *.pages.dev);
  *  - the version file is this build's.
  *
  * Usage: node scripts/luckgram/check-site.mjs [siteDir]     (default tmp/luckgram-site)
@@ -62,7 +62,9 @@ for(const name of serviceWorkers) {
 const noindex = /<meta name="robots" content="noindex/.test(html);
 const headers = read('_headers');
 if(info.channel === 'prod') {
-  if(noindex || /X-Robots-Tag/.test(headers)) errors.push('a production build is marked noindex');
+  // * only Cloudflare's own addresses of the project (*.pages.dev) are kept out of search engines (specs#167)
+  const marked = headers.split(/\n(?=\S)/).filter((section) => /X-Robots-Tag/.test(section) && !/^https:\/\/\S*\.pages\.dev\//.test(section));
+  if(noindex || marked.length) errors.push('a production build is marked noindex');
 } else if(!noindex || !/X-Robots-Tag: noindex/.test(headers)) {
   errors.push('a development build is not marked noindex');
 }
