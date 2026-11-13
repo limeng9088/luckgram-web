@@ -4,7 +4,7 @@
 import EventListenerBase from '@helpers/eventListenerBase';
 import {MTConnection, MTConnectionEvents} from '@lib/mtproto/transports/transport';
 import {
-  ATTEMPT_TIMEOUT, RouteConfig, getRouteCandidates, getStartDelays, normalizeRelays, parseOfficialUrl
+  ATTEMPT_TIMEOUT, OFFICIAL_HEAD_START, RouteConfig, getRouteCandidates, getStartDelays, normalizeRelays, parseOfficialUrl
 } from '@/luckgram/relay/routes';
 import {sanitizeRouteConfig} from '@/luckgram/relay/state';
 import {
@@ -232,9 +232,13 @@ describe('luckgram relay: the choice of a route', () => {
     expect(getRouteCandidates('wss://kws2.web.telegram.org/apiws_test', config({mode: 'relay'})).map((c) => c.id)).toEqual(['official']);
   });
 
-  test('nothing remembered: the first two start together; something remembered: it gets a head start', () => {
+  test('nothing remembered: Telegram first, the relays after a moment; something remembered: it gets a head start', () => {
     const candidates = getRouteCandidates(OFFICIAL, config());
-    expect(getStartDelays(candidates, false)).toEqual([0, 0, 2500]);
+    // * a relay answers the handshake before it has reached Telegram: in an even race it would always win (specs#148)
+    expect(getStartDelays(candidates, false)).toEqual([0, OFFICIAL_HEAD_START, OFFICIAL_HEAD_START + 2500]);
+    expect(Math.max(...getStartDelays(candidates, false))).toBeLessThan(ATTEMPT_TIMEOUT);
+    // * relays only: nothing to hold them back for
+    expect(getStartDelays(getRouteCandidates(OFFICIAL, config({mode: 'relay'})), false)).toEqual([0, 0]);
     expect(getStartDelays(candidates, true)).toEqual([0, 2500, 5000]);
     expect(Math.max(...getStartDelays(candidates, true))).toBeLessThan(ATTEMPT_TIMEOUT);
   });
@@ -304,8 +308,12 @@ describe('luckgram relay: the connection that tries the routes', () => {
     vi.useRealTimers();
   });
 
-  test('nothing remembered: Telegram and the first relay race, the faster one is the connection', async() => {
+  test('nothing remembered: Telegram\'s address alone for a moment, then the first relay joins and the faster one is the connection', async() => {
     const {connection, events} = await connect();
+    expect(FakeSocket.all.map((socket) => socket.url)).toEqual([OFFICIAL]);
+    await vi.advanceTimersByTimeAsync(OFFICIAL_HEAD_START - 600);
+    expect(FakeSocket.all.length).toBe(1);
+    await vi.advanceTimersByTimeAsync(600);
     expect(FakeSocket.all.map((socket) => socket.url)).toEqual([OFFICIAL, 'wss://ws.luckgram.cc/2/apiws']);
 
     byUrl('ws.luckgram.cc').open();
@@ -323,8 +331,17 @@ describe('luckgram relay: the connection that tries the routes', () => {
     expect(events).toEqual(['open', 'message']);
   });
 
+  test('Telegram\'s address opens within its moment: no relay is contacted at all', async() => {
+    const {events} = await connect();
+    byUrl('telegram.org').open();
+    expect(events).toEqual(['open']);
+    await vi.advanceTimersByTimeAsync(ATTEMPT_TIMEOUT);
+    expect(FakeSocket.all.map((socket) => socket.url)).toEqual([OFFICIAL]);
+  });
+
   test('the connection that opened is remembered and goes first, alone, the next time', async() => {
     (await connect()).connection;
+    await vi.advanceTimersByTimeAsync(OFFICIAL_HEAD_START);
     byUrl('ws.luckgram.cc').open();
 
     FakeSocket.all = [];
@@ -338,9 +355,11 @@ describe('luckgram relay: the connection that tries the routes', () => {
 
   test('an address that fails hands over to the next at once', async() => {
     const {events} = await connect();
+    // * Telegram's address fails: the relay does not wait for its moment
     byUrl('telegram.org').close();
-    expect(FakeSocket.all.length).toBe(3);
+    expect(FakeSocket.all.length).toBe(2);
     byUrl('ws.luckgram.cc').close();
+    expect(FakeSocket.all.length).toBe(3);
     expect(events).toEqual([]);
 
     byUrl('lgws.cat158.com').open();
@@ -409,6 +428,7 @@ describe('luckgram relay: the connection that tries the routes', () => {
   test('bytes are counted per route and kind of connection', async() => {
     const before = JSON.parse(JSON.stringify(getRouteTraffic()));
     const {connection} = await connect();
+    await vi.advanceTimersByTimeAsync(OFFICIAL_HEAD_START);
     byUrl('ws.luckgram.cc').open();
     connection.send(new Uint8Array(100));
     byUrl('ws.luckgram.cc').dispatchEvent('message', new ArrayBuffer(2000));
