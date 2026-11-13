@@ -89,6 +89,32 @@ setInterval(() => {
   if(streaming || isPage) channel?.postMessage({type: 'beat', ctx: id, t: now, lag, born} satisfies Message);
 }, 500);
 
+// * a hidden or covered page gets no animation frames and its timers are slowed to one a second
+if(isPage) {
+  const visibility = () => diag('visibility', document.visibilityState, 'focused:', document.hasFocus(), 'size:', `${innerWidth}x${innerHeight}`, 'outer:', `${outerWidth}x${outerHeight}`, 'screen pos:', `${screenX},${screenY}`);
+  visibility();
+  document.addEventListener('visibilitychange', visibility);
+  self.addEventListener('focus', visibility);
+  self.addEventListener('blur', visibility);
+  let frames = 0, seen = 0, coming: boolean;
+  const frame = () => {
+    ++frames;
+    requestAnimationFrame(frame);
+  };
+  const askedAt = Date.now();
+  requestAnimationFrame(() => {
+    diag('raf', `the first animation frame came after ${Date.now() - askedAt} ms`);
+    frame();
+  });
+  setInterval(() => {
+    const now = frames > seen;
+    seen = frames;
+    if(now === coming) return;
+    coming = now;
+    diag('raf', now ? 'animation frames are coming' : 'no animation frames in the last 5 s', `(total ${frames})`);
+  }, 5000);
+}
+
 self.addEventListener('error', (event: any) => diag('error', event?.message || event, event?.filename ? `${String(event.filename).split('/').pop()}:${event.lineno}` : ''));
 self.addEventListener('unhandledrejection', (event: any) => diag('unhandledrejection', event?.reason?.stack ? String(event.reason.stack).slice(0, 300) : event?.reason));
 
