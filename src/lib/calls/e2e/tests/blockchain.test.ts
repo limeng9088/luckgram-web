@@ -10,6 +10,11 @@ import {bytesToHex, ensureCryptoReady} from '../crypto';
 import {PrivateKey} from '../keys';
 import {Block, Change, GroupParticipant, GroupState, PERM_ADD_USERS, PERM_REMOVE_USERS, serializeBlockForSigning} from '../tlTypes';
 
+// * Luckgram: some `describe` blocks below make their keys as the file is collected, before any `beforeAll`
+// * runs. libsodium finishes loading on its own time, so on a busy machine those calls came first and the
+// * whole file failed ("crypto_sign_seed_keypair is not a function"). It is waited for here, before anything.
+await ensureCryptoReady();
+
 beforeAll(() => ensureCryptoReady());
 
 // Build a block + sign it with the given key.
