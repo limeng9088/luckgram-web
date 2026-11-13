@@ -41,7 +41,8 @@ export function luckgramHtmlContext(env = process.env) {
   const origin = LUCKGRAM_ORIGINS[getLuckgramChannel(env)];
   return {
     title: 'Luckgram',
-    description: 'Luckgram — a fast, secure messenger for your Telegram account, with AI built in.',
+    // * says what the site is to anyone who judges it by its description (luckgram-specs#167)
+    description: 'Luckgram is an independent third-party client that uses the Telegram API, with more accounts and AI built in. It is not an official Telegram app.',
     url: origin,
     origin
   };
