@@ -10,6 +10,15 @@
  *
  * A socket to a relay is created only when its turn has come (gate.ts): the time an attempt
  * spends waiting for other connections' handshakes does not count against it.
+ *
+ * Three things save the user a handshake, or the wait for someone else's, where handshakes are slow (luckgram-specs#148):
+ *  - upstream's transport probe opens a connection only to see that one opens, and drops it. Here
+ *    that connection is kept for a moment, untouched, and the first connection of the account on
+ *    screen to the same address takes it over instead of making its own;
+ *  - the connections of the accounts not on screen stay away from a relay while the account on
+ *    screen is setting up (IDLE_HOLD);
+ *  - a relay may answer before it has reached Telegram. One that opens and then hangs up without
+ *    a byte from Telegram is taken for a route that does not work.
  */
 
 import EventListenerBase from '@helpers/eventListenerBase';
@@ -20,12 +29,65 @@ import {GateTicket, RelayGate} from '@/luckgram/relay/gate';
 import {RouteMessage, RouteStatus, emptyRouteTraffic, getDefaultRouteConfig, openRouteChannel, sanitizeRouteConfig} from '@/luckgram/relay/state';
 
 const CONFIG_WAIT = 400;
+/** How long the probe's connection is kept for someone to take over. */
+export const SPARE_MS = 3000;
+/**
+ * The connections of the accounts not on screen keep away from a relay this long after the account on
+ * screen last started or opened a message connection: its next one — a key is made over a connection of
+ * its own — would otherwise find the relay in the middle of an idle slot's handshake, and wait it out.
+ */
+export const IDLE_HOLD = 5000;
+/** …and no longer than this in all, whatever the account on screen does. */
+export const IDLE_HOLD_MAX = 15000;
+/** A relay's connection that closes this soon after it opened, with nothing received, did not reach Telegram. */
+export const SILENT_WINDOW = 15000;
 
 let config: RouteConfig = getDefaultRouteConfig();
 let status: RouteStatus = {mode: config.mode};
 let channel: BroadcastChannel;
 let configReady: Promise<void>;
-const live = new Set<{forceClose: () => void}>();
+const live = new Set<{forceClose: () => void, adoptSpare: () => boolean}>();
+
+/** A socket and whoever listens to it now: the connection that made it, nobody (kept as a spare), or the one that took it over. */
+type Link = {
+  connection: MTConnection,
+  candidate: RouteCandidate,
+  onMessage: (buffer: ArrayBuffer) => void,
+  onClose: () => void
+};
+
+/** The probe's connection, open and with nothing sent over it, and the address it was made for. */
+let spare: {link: Link, url: string, timer: number};
+
+function dropSpare() {
+  if(!spare) return;
+  const {link, timer} = spare;
+  spare = undefined;
+  clearTimeout(timer);
+  link.onClose = () => {};
+  link.connection.close();
+}
+
+function keepSpare(link: Link, url: string) {
+  dropSpare();
+  link.onMessage = () => {};
+  link.onClose = () => {
+    if(spare?.link !== link) return;
+    clearTimeout(spare.timer);
+    spare = undefined;
+    // * hung up on, moments after it opened: a relay that did not reach Telegram (Telegram itself keeps an idle socket)
+    if(link.candidate.kind === 'relay') {
+      gate.silent(link.candidate.id);
+      if(config.preferred === link.candidate.id) config.preferred = undefined;
+    }
+  };
+  spare = {link, url, timer: ctx.setTimeout(dropSpare, SPARE_MS)};
+
+  // * someone may already be waiting for a connection to this address
+  for(const socket of live) {
+    if(socket.adoptSpare()) break;
+  }
+}
 /** One handshake at a time per relay, for the whole context (gate.ts). */
 let gate = new RelayGate();
 /** The accounts on screen in the tabs: their connections take their turn at a relay before the others'. */
@@ -44,8 +106,13 @@ export function getGatePriority(account: number | undefined, isMedia: boolean, a
   return (onScreen ? 0 : 2) + (isMedia ? 1 : 0);
 }
 
+/** Until when the idle slots keep away from the relays (IDLE_HOLD). */
+let userBusyUntil = 0;
+
 /** For tests: forgets what connected, what failed and who is on screen. */
 export function resetRouteState(accounts: number[] = []) {
+  dropSpare();
+  userBusyUntil = 0;
   gate = new RelayGate();
   activeAccounts.clear();
   accounts.forEach((account) => activeAccounts.add(account));
@@ -78,7 +145,10 @@ export function applyRouteConfig(value: any) {
   postStatus({});
 
   // * another connection mode: what is open may be on a route it does not allow
-  if(modeChanged) live.forEach((socket) => socket.forceClose());
+  if(modeChanged) {
+    dropSpare();
+    live.forEach((socket) => socket.forceClose());
+  }
 }
 
 function init() {
@@ -97,6 +167,7 @@ function init() {
         applyRouteConfig(message.config);
         resolve();
       } else if(message?.type === 'retry') {
+        dropSpare();
         live.forEach((socket) => socket.forceClose());
       } else if(message?.type === 'hello' && status.state) {
         // * a page that opened later asks the same channel for its settings; tell it where we are
@@ -109,9 +180,17 @@ function init() {
   return configReady;
 }
 
-export function makeRoutedConnection(Connection: MTConnectionConstructable, account?: number): MTConnectionConstructable {
+/**
+ * @param account the account slot the connection belongs to
+ * @param probe upstream's transport probe: it only wants to see a connection open, and sends nothing
+ */
+export function makeRoutedConnection(Connection: MTConnectionConstructable, account?: number, probe = false): MTConnectionConstructable {
   return class RoutedConnection extends EventListenerBase<MTConnectionEvents> implements MTConnection {
     private winner: MTConnection;
+    private link: Link;
+    private started = false;
+    private closing = false;
+    private heldSince: number;
     private attempts = new Map<MTConnection, RouteCandidate>();
     private timers: number[] = [];
     private tickets = new Map<RouteCandidate, GateTicket>();
@@ -135,6 +214,8 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
 
     private start() {
       if(this.closed) return;
+      this.started = true;
+      if(this.adoptSpare()) return;
 
       const candidates = getRouteCandidates(this.url, config);
       const hasPreferred = !!config.preferred && candidates[0].id === config.preferred;
@@ -150,6 +231,22 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
 
       const connectTo = (candidate: RouteCandidate, ticket?: GateTicket) => {
         const connection = new Connection(this.dcId, candidate.url, this.logSuffix);
+        const link: Link = {
+          connection,
+          candidate,
+          onMessage: () => {},
+          onClose: () => {
+            const pending = this.attempts.delete(connection);
+            // * closed by us (another candidate won, or the attempt is over) says nothing about the relay
+            if(pending && !this.opened && !this.closed) ticket?.done(false);
+            else ticket?.cancel();
+            if(pending) {
+              onFailed();
+              this.syncDeadline();
+            }
+          }
+        };
+
         this.attempts.set(connection, candidate);
         this.syncDeadline();
 
@@ -160,46 +257,12 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
             return;
           }
 
-          this.opened = true;
-          this.winner = connection;
-          this.clearTimers();
-          this.attempts.forEach((_, other) => other !== connection && other.close());
-          this.attempts.clear();
-          this.cancelTickets();
-          this.counter = traffic[`${candidate.kind}${this.isMedia ? 'Media' : 'Client'}`];
-          ++this.counter.connections;
-          trafficChanged();
-
-          if(this.isMain) {
-            config.preferred = candidate.id;
-            postStatus({state: 'connected', kind: candidate.kind, id: candidate.id});
-          }
-
-          this.dispatchEvent('open');
+          this.attempts.delete(connection);
+          this.take(link);
         });
 
-        connection.addEventListener('message', (buffer) => {
-          if(this.winner !== connection) return;
-          this.counter.down += buffer.byteLength;
-          trafficChanged();
-          this.dispatchEvent('message', buffer);
-        });
-
-        connection.addEventListener('close', () => {
-          if(this.winner === connection) {
-            this.finish(false);
-            return;
-          }
-
-          const pending = this.attempts.delete(connection);
-          // * closed by us (another candidate won, or the attempt is over) says nothing about the relay
-          if(pending && !this.opened && !this.closed) ticket?.done(false);
-          else ticket?.cancel();
-          if(pending) {
-            onFailed();
-            this.syncDeadline();
-          }
-        });
+        connection.addEventListener('message', (buffer) => link.onMessage(buffer));
+        connection.addEventListener('close', () => link.onClose());
       };
 
       const startNext = () => {
@@ -210,17 +273,40 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
           return;
         }
 
-        // * created only when no other connection is in the middle of its handshake with this relay
-        let ran = false;
-        const ticket = gate.enter(candidate.id, getGatePriority(account, this.isMedia), (down, ticket) => {
-          ran = true;
-          this.tickets.delete(candidate);
-          if(this.closed || this.opened) ticket.cancel();
-          else if(down) onFailed();
-          else connectTo(candidate, ticket);
-        });
+        const priority = getGatePriority(account, this.isMedia);
+        const enter = () => {
+          if(priority === 0) {
+            userBusyUntil = Date.now() + IDLE_HOLD;
+          } else if(priority >= 2) {
+            // * an idle slot's: not while the account on screen is likely to need the relay next
+            const now = Date.now();
+            const wait = Math.min(userBusyUntil, (this.heldSince ??= now) + IDLE_HOLD_MAX) - now;
+            if(wait > 0) {
+              const timer = ctx.setTimeout(() => {
+                this.tickets.delete(candidate);
+                if(this.closed || this.opened) return;
+                enter();
+                this.syncDeadline();
+              }, wait);
+              this.tickets.set(candidate, {done: () => {}, cancel: () => clearTimeout(timer)});
+              return;
+            }
+          }
 
-        if(!ran) this.tickets.set(candidate, ticket);
+          // * created only when no other connection is in the middle of its handshake with this relay
+          let ran = false;
+          const ticket = gate.enter(candidate.id, priority, (down, ticket) => {
+            ran = true;
+            this.tickets.delete(candidate);
+            if(this.closed || this.opened) ticket.cancel();
+            else if(down) onFailed();
+            else connectTo(candidate, ticket);
+          });
+
+          if(!ran) this.tickets.set(candidate, ticket);
+        };
+
+        enter();
         this.syncDeadline();
       };
 
@@ -236,6 +322,66 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
       });
 
       this.syncDeadline();
+    }
+
+    /** `link`'s socket is open and is this connection from now on: one of its own, or the spare. */
+    private take(link: Link) {
+      const {connection, candidate} = link;
+      this.opened = true;
+      this.winner = connection;
+      this.link = link;
+      this.clearTimers();
+      [...this.attempts.keys()].forEach((other) => other.close());
+      this.attempts.clear();
+      this.cancelTickets();
+      this.counter = traffic[`${candidate.kind}${this.isMedia ? 'Media' : 'Client'}`];
+      ++this.counter.connections;
+      trafficChanged();
+      if(candidate.kind === 'relay' && getGatePriority(account, this.isMedia) === 0) userBusyUntil = Date.now() + IDLE_HOLD;
+
+      const openedAt = Date.now();
+      let heard = false;
+      link.onMessage = (buffer) => {
+        if(!heard) {
+          heard = true;
+          if(candidate.kind === 'relay') gate.heard(candidate.id);
+        }
+
+        this.counter.down += buffer.byteLength;
+        trafficChanged();
+        this.dispatchEvent('message', buffer);
+      };
+
+      link.onClose = () => {
+        // * the relay said "open" and then hung up with nothing from Telegram: it did not reach it
+        if(candidate.kind === 'relay' && !heard && !this.closing && Date.now() - openedAt < SILENT_WINDOW) {
+          gate.silent(candidate.id);
+          if(config.preferred === candidate.id) config.preferred = undefined;
+        }
+
+        this.finish(false);
+      };
+
+      if(this.isMain) {
+        config.preferred = candidate.id;
+        postStatus({state: 'connected', kind: candidate.kind, id: candidate.id});
+      }
+
+      this.dispatchEvent('open');
+    }
+
+    /** Takes over the probe's connection if it was made for this address and this connection may have it. */
+    public adoptSpare() {
+      if(probe || !spare || !this.started || this.opened || this.closed || spare.url !== this.url) return false;
+      // * for the account on screen: an idle slot taking it would leave the user's connection to its own handshake
+      if(getGatePriority(account, this.isMedia) !== 0) return false;
+      const {link, timer} = spare;
+      if(!getRouteCandidates(this.url, config).some((candidate) => candidate.id === link.candidate.id)) return false;
+
+      spare = undefined;
+      clearTimeout(timer);
+      this.take(link);
+      return true;
     }
 
     /**
@@ -297,7 +443,9 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
     }
 
     public send = (body: Uint8Array) => {
-      if(!this.winner) return;
+      // * nothing of the probe goes out (upstream's transport would send the first packet of its own
+      // * session as the socket opens): the connection stays as new for whoever takes it over
+      if(!this.winner || probe) return;
       this.counter.up += body.byteLength;
       trafficChanged();
       this.winner.send(body);
@@ -306,7 +454,17 @@ export function makeRoutedConnection(Connection: MTConnectionConstructable, acco
     public close() {
       const winner = this.winner;
       if(winner && !this.closed) {
+        if(probe) {
+          // * the probe has seen what it wanted; the socket is kept for a connection that needs one
+          const link = this.link;
+          this.winner = this.link = undefined;
+          this.finish(false);
+          keepSpare(link, this.url);
+          return;
+        }
+
         // * its close event finishes this connection, as it does for upstream's socket
+        this.closing = true;
         winner.close();
         return;
       }

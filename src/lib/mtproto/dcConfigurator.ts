@@ -84,6 +84,8 @@ export class DcConfigurator {
 
   /** Luckgram: the account slot these connections belong to; none for the transport probe (createManagers.ts). */
   public luckgramAccount?: number;
+  /** Luckgram: these are the transport probe's connections — the one that opens is kept for the first real connection (controller.ts, luckgram-specs#148). */
+  public luckgramProbe?: boolean;
 
   private transportSocket = (dcId: DcId, connectionType: ConnectionType, premium?: boolean) => {
     if(!import.meta.env.VITE_MTPROTO_HAS_WS) {
@@ -103,7 +105,7 @@ export class DcConfigurator {
     }
 
     // * Luckgram: the connection chooses between Telegram's address and Luckgram's relays (src/luckgram/relay)
-    return new TcpObfuscated(makeRoutedConnection(oooohLetMeLive, this.luckgramAccount), dcId, chosenServer, logSuffix, retryTimeout);
+    return new TcpObfuscated(makeRoutedConnection(oooohLetMeLive, this.luckgramAccount, this.luckgramProbe), dcId, chosenServer, logSuffix, retryTimeout);
   };
 
   private transportHTTP = (dcId: DcId, connectionType: ConnectionType, premium?: boolean) => {
