@@ -50,7 +50,9 @@ export class MTTransportController extends EventListenerBase<{
   }
 
   private async pingTransportsOnce() {
-    const dcConfigurator = this.dcConfigurator ??= new DcConfigurator();
+    // * Luckgram: marked as the probe's, so that the WebSocket it opens is handed to the first connection that
+    // * needs one instead of being thrown away (src/luckgram/relay/routedSocket.ts, luckgram-specs#148)
+    const dcConfigurator = this.dcConfigurator ??= Object.assign(new DcConfigurator(), {luckgramProbe: true});
     const timeout = 2000;
     const transports: {[k in TransportType]?: MTTransport} = this.transports = {
       https: dcConfigurator.chooseServer(App.baseDcId, 'client', 'https', false),
