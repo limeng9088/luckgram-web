@@ -94,14 +94,27 @@ export function getRouteCandidates(officialUrl: string, config: RouteConfig): Ro
 }
 
 /**
+ * How long Telegram's own address is tried alone before the first relay joins, when nothing is
+ * remembered. A relay answers the handshake before it has reached Telegram (relay/src/bridge.js,
+ * luckgram-specs#148) — in some 50 ms, where Telegram's address takes several hundred — so in an
+ * even race the relay would always win and be remembered, and everyone would go through the
+ * relay, also where Telegram can be reached. Where it cannot, the first connection ever waits
+ * this long (or not at all when the address fails at once); after that the relay is remembered.
+ */
+export const OFFICIAL_HEAD_START = 1500;
+
+/**
  * When each candidate is started, in ms from the beginning of the attempt.
- * Nothing remembered: the official address and the first relay start together and the faster
- * one wins. Something remembered: it gets a head start, the others follow only if it is slow —
- * and at once when it fails (routedSocket.ts).
+ * Nothing remembered: Telegram's address first, the first relay after OFFICIAL_HEAD_START, the
+ * others every `step` after that; with relays only, the first two start together. Something
+ * remembered: it gets a head start of `step`, the others follow only if it is slow. In every
+ * case the next one starts at once when one fails (routedSocket.ts).
  */
 export function getStartDelays(candidates: RouteCandidate[], hasPreferred: boolean, step = 2500): number[] {
+  const officialFirst = !hasPreferred && candidates[0]?.kind === 'official';
   return candidates.map((_, index) => {
     if(hasPreferred) return index * step;
+    if(officialFirst) return index ? OFFICIAL_HEAD_START + (index - 1) * step : 0;
     return index < 2 ? 0 : (index - 1) * step;
   });
 }
