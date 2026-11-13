@@ -15,6 +15,10 @@ import {LuckgramApiError, errorFromResponse} from '@/luckgram/core/errors';
 
 const KEY_TOKEN = 'device_token';
 const KEY_ENDPOINT = 'api_endpoint';
+// * registration is limited per IP address and the server says for how long (hours, when a whole office or a
+// * VPN exit shares the address): until then asking again only prolongs it, in this tab or another
+const KEY_REGISTER_RETRY_AT = 'device_register_retry_at';
+const REGISTER_RETRY_MAX_MS = 24 * 60 * 60 * 1000;
 /** Until the response's headers: an entry that does not answer by then is taken for unreachable. */
 const CONNECT_TIMEOUT_MS = 10000;
 const APP_VERSION_HEADER = 'X-Luckgram-App-Version';
@@ -170,19 +174,36 @@ export class LuckgramApi {
 
   private register(signal?: AbortSignal): Promise<string> {
     return this.registering ??= (async() => {
+      const retryAt = Number(this.settings.getPrivate(KEY_REGISTER_RETRY_AT)) || 0, now = this.now();
+      if(retryAt > now && retryAt - now <= REGISTER_RETRY_MAX_MS) {
+        const error = new LuckgramApiError(LuckgramApiError.RATE_LIMITED, 429);
+        error.retryAfterSeconds = Math.ceil((retryAt - now) / 1000);
+        throw error;
+      }
+
       const response = await this.send({
         path: '/v1/devices',
         json: {platform: 'web', app_version: this.options.appVersion, locale: this.options.locale?.() || navigator.language || 'en'},
         signal
       });
 
-      if(!response.ok) throw errorFromResponse(response.status, await response.text().catch((): undefined => undefined));
+      if(!response.ok) {
+        const error = errorFromResponse(response.status, await response.text().catch((): undefined => undefined));
+        if(error.code === LuckgramApiError.RATE_LIMITED) {
+          error.retryAfterSeconds ||= Math.max(0, Number(response.headers.get('Retry-After')) || 0);
+          const wait = Math.min(error.retryAfterSeconds * 1000, REGISTER_RETRY_MAX_MS);
+          if(wait > 0) await this.settings.setPrivate(KEY_REGISTER_RETRY_AT, this.now() + wait);
+        }
+
+        throw error;
+      }
 
       const data = await response.json().catch((): any => undefined);
       const token: string = typeof(data?.token) === 'string' && data.token ? data.token : data?.device_token;
       if(typeof(token) !== 'string' || !token) throw new LuckgramApiError(LuckgramApiError.UPSTREAM_UNAVAILABLE, response.status);
 
       await this.settings.setPrivate(KEY_TOKEN, token);
+      if(retryAt) await this.settings.setPrivate(KEY_REGISTER_RETRY_AT, undefined);
       return token;
     })().finally(() => {
       this.registering = undefined;

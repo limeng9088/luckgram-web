@@ -229,7 +229,7 @@ describe('luckgram API client', () => {
   const json = (status: number, body: any, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json', ...headers}});
 
-  const setup = async(handler: (call: Call, calls: Call[]) => Response | Promise<Response>) => {
+  const setup = async(handler: (call: Call, calls: Call[]) => Response | Promise<Response>, now?: () => number) => {
     const calls: Call[] = [];
     const settings = new LuckgramSettingsStore(new LuckgramMemoryStorage(), null);
     await settings.ready;
@@ -237,6 +237,7 @@ describe('luckgram API client', () => {
       endpoints: [MAIN, BACKUP],
       appVersion: '2.3',
       locale: () => 'zh-CN',
+      now,
       settings: settings as any,
       fetch: (async(url: any, init: any) => {
         const call = {url: String(url), init};
@@ -268,6 +269,44 @@ describe('luckgram API client', () => {
     // * and the next request does not register again
     await api.requestJSON({path: '/v1/config'});
     expect(calls.length).toBe(3);
+  });
+
+  test('registration refused for a while: nothing is asked again until the time the server gave', async() => {
+    let time = 1000_000, limited = true;
+    const {api, calls, settings} = await setup((call) => {
+      if(!call.url.endsWith('/v1/devices')) return json(200, {ok: true});
+      return limited ? json(429, {error: {code: 'rate_limited', retry_after_seconds: 3600}}) : json(201, {token: 'tok-1'});
+    }, () => time);
+
+    await expect(api.requestJSON({path: '/v1/config'})).rejects.toMatchObject({code: 'rate_limited', status: 429, retryAfterSeconds: 3600});
+    expect(calls.length).toBe(1);
+
+    // * the config, the announcements, another tab: none of them reaches the server
+    time += 60_000;
+    await expect(api.requestJSON({path: '/v1/announcements'})).rejects.toMatchObject({code: 'rate_limited', retryAfterSeconds: 3540});
+    expect(calls.length).toBe(1);
+
+    // * once the time has passed it registers, and forgets the wait
+    time += 3540_000;
+    limited = false;
+    expect(await api.requestJSON({path: '/v1/config'})).toEqual({ok: true});
+    expect(settings.getPrivate('device_token')).toBe('tok-1');
+    expect(settings.getPrivate('device_register_retry_at')).toBeUndefined();
+  });
+
+  test('a refusal without a time is not remembered; a clock set back does not lock registration', async() => {
+    let time = 5000_000, status = 429;
+    const {api, calls, settings} = await setup((call) =>
+      call.url.endsWith('/v1/devices') ? (status === 429 ? json(429, {error: {code: 'rate_limited'}}) : json(201, {token: 'tok-1'})) : json(200, {}), () => time);
+
+    await expect(api.requestJSON({path: '/v1/me'})).rejects.toMatchObject({code: 'rate_limited'});
+    await expect(api.requestJSON({path: '/v1/me'})).rejects.toMatchObject({code: 'rate_limited'});
+    expect(calls.length).toBe(2);
+
+    await settings.setPrivate('device_register_retry_at', time + 30 * 24 * 60 * 60 * 1000);
+    status = 201;
+    await api.requestJSON({path: '/v1/me'});
+    expect(settings.getPrivate('device_token')).toBe('tok-1');
   });
 
   test('requests at the same moment share one registration', async() => {
