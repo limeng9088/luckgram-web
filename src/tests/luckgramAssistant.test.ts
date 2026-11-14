@@ -5,7 +5,7 @@ import {IDBFactory} from 'fake-indexeddb';
 import {LuckgramIndexedDBStorage, LuckgramMemoryStorage} from '@/luckgram/core/storage';
 import {AssistantStore} from '@/luckgram/assistant/store';
 import {
-  AI_HASH, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
+  AI_HASH, ASK_FILE_MAX_BYTES, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, canReadFile, composeAskText, isTextFile, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
   getConversationsToPrune, getOrphanKeys, makeId, makeTitle, markdownToEntities, newConversation, prepareMarkdown, sortConversations
 } from '@/luckgram/assistant/logic';
 import {
@@ -296,5 +296,42 @@ describe('luckgram assistant: the row over the chat list', () => {
     expect(isPinVisible({enabled: true, pinned: true, filterId: 5})).toBe(false);
     expect(isPinVisible({enabled: true, pinned: false, filterId: 0})).toBe(false);
     expect(isPinVisible({enabled: false, pinned: true, filterId: 0})).toBe(false);
+  });
+});
+
+describe('luckgram assistant: "问 AI"', () => {
+  test('a text file of 1 MB or less is read; anything else only gives its name', () => {
+    expect(isTextFile('text/plain', 'a.bin')).toBe(true);
+    expect(isTextFile('application/json', undefined)).toBe(true);
+    expect(isTextFile('application/octet-stream', 'notes.MD')).toBe(true);
+    expect(isTextFile(undefined, 'main.py')).toBe(true);
+    expect(isTextFile('application/pdf', 'paper.pdf')).toBe(false);
+    expect(isTextFile('image/png', 'shot.png')).toBe(false);
+    expect(isTextFile(undefined, undefined)).toBe(false);
+
+    expect(canReadFile('text/plain', 'a.txt', ASK_FILE_MAX_BYTES)).toBe(true);
+    expect(canReadFile('text/plain', 'a.txt', ASK_FILE_MAX_BYTES + 1)).toBe(false);
+    expect(canReadFile('text/plain', 'a.txt', 0)).toBe(false);
+    expect(canReadFile('application/zip', 'a.zip', 10)).toBe(false);
+  });
+
+  test('the text, the links it only names, the file and its content — then room for the question', () => {
+    expect(composeAskText({text: ' 看这篇 ', links: ['https://example.com/a', 'https://example.com/a']})).toBe('看这篇\n\nhttps://example.com/a\n\n');
+    // * a link that is written out in the text is not said twice
+    expect(composeAskText({text: 'see https://example.com/a', links: ['https://example.com/a']})).toBe('see https://example.com/a\n\n');
+    expect(composeAskText({fileName: 'notes.txt', fileContent: 'line 1\nline 2\u0000'})).toBe('[notes.txt]\nline 1\nline 2\n\n');
+    expect(composeAskText({text: '报告', fileName: 'report.pdf'})).toBe('报告\n\n[report.pdf]\n\n');
+    expect(composeAskText({})).toBe('');
+  });
+
+  test('cut to what a request may carry: the file\'s content first, the message\'s text kept', () => {
+    const out = composeAskText({text: '总结这个文件', fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000);
+    expect(out.length).toBeLessThanOrEqual(1002);
+    expect(out.startsWith('总结这个文件\n\n[big.log]\nxxx')).toBe(true);
+    expect(out).toContain('…');
+
+    // * no room worth using: the name alone
+    expect(composeAskText({text: 'y'.repeat(700), fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000)).toBe('y'.repeat(700) + '\n\n[big.log]\n\n');
+    expect(composeAskText({text: 'z'.repeat(3000)}, 1000).length).toBe(1002);
   });
 });
