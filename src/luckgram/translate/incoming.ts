@@ -203,11 +203,28 @@ async function updateButton(bubble: Decorated, message: Message.message) {
     container.append(button);
   }
 
+  fitButton(button);
   const translated = isMessageTranslated(message);
   button.classList.toggle('is-active', translated);
   const label = translated ? lgText('撤销翻译', 'Undo translation') : lgText('翻译', 'Translate');
   button.title = label;
   button.setAttribute('aria-label', label);
+}
+
+/**
+ * Beside the bubble where there is room (luckgram.scss has the columns); a bubble as wide as a
+ * narrow window leaves none, and the icon goes over the bubble's corner instead.
+ */
+function fitButton(button: HTMLElement) {
+  requestAnimationFrame(() => {
+    if(!button.isConnected) return;
+    button.classList.remove('is-over-corner');
+    const rect = button.getBoundingClientRect();
+    if(!rect.width) return;
+    const scroller = button.closest<HTMLElement>('.scrollable') || document.documentElement;
+    const bounds = scroller.getBoundingClientRect();
+    if(rect.right > bounds.right - 4 || rect.left < bounds.left + 4) button.classList.add('is-over-corner');
+  });
 }
 
 // ------------------------------------------------------------------ drawing a bubble
@@ -276,6 +293,14 @@ let watching = false;
 function watchSettings() {
   if(watching) return;
   watching = true;
+
+  let resizeTimeout: number;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = window.setTimeout(() => {
+      document.querySelectorAll<HTMLElement>('.' + BUTTON_CLASS).forEach(fitButton);
+    }, 200);
+  });
 
   createRoot(() => {
     const [appSettings] = useAppSettings();
