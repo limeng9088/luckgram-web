@@ -970,6 +970,8 @@ export default class ChatRecording {
   }
 
   private startRecordingNow(type: 'voice' | 'video') {
+    // * Luckgram (W6): dictation has the microphone — the two never record together
+    if(this.input.luckgramDictation?.isActive) return;
     // `this.active` only flips true once start() resolves; for video that
     // now includes waiting for the camera's first visible frame, a longer
     // window in which a second click could kick off a duplicate recording.

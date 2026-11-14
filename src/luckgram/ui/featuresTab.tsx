@@ -22,6 +22,7 @@ import luckgramAI from '@/luckgram/core/instance';
 import {remoteConfig} from '@/luckgram/core/remoteConfig';
 import LuckgramConnectionSection from '@/luckgram/relay/connectionSection';
 import TranslateSettingsRows from '@/luckgram/translate/settingsRows';
+import DictationSettingsRows from '@/luckgram/voice/settingsRows';
 import {LuckgramSubpageTab, useLuckgramTabTitle} from '@/luckgram/ui/tabs';
 import {lgText} from '@/luckgram/text';
 
@@ -102,6 +103,9 @@ export default function LuckgramFeaturesPage(): JSX.Element {
             <For each={features(group)}>{(feature) => <FeatureRow feature={feature} openSubpage={openSubpage} />}</For>
             <Show when={group === 'messages' && features(group).some((feature) => feature.key === 'translate_in' || feature.key === 'translate_out')}>
               <TranslateSettingsRows />
+            </Show>
+            <Show when={group === 'messages' && features(group).some((feature) => feature.key === 'dictation')}>
+              <DictationSettingsRows />
             </Show>
           </Section>
         </Show>

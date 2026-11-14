@@ -1,3 +1,5 @@
+import {getVoiceErrorText, getVoiceRetryText, isFreeTranscribeOn, transcribeMessage} from '@/luckgram/voice/transcribe';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 import {animateValue, simpleEasing} from '@helpers/animateValue';
 import createElementFromMarkup from '@helpers/createElementFromMarkup';
 import anchorCallback from '@helpers/dom/anchorCallback';
@@ -9,7 +11,7 @@ import {i18n} from '@lib/langPack';
 import rootScope from '@lib/rootScope';
 import appMediaPlaybackController, {MediaSearchContext} from '@components/appMediaPlaybackController';
 import Icon from '@components/icon';
-import {hideToast, toastNew} from '@components/toast';
+import {hideToast, toast, toastNew} from '@components/toast';
 import wrapDocument from '@components/wrappers/document';
 import {SpinnerElement} from '@components/spinner';
 import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
@@ -205,7 +207,11 @@ export function wrapRoundVideoBubble({
   }
 
   async function showAudio() {
-    if(!rootScope.getPremium()) {
+    // * Luckgram (W6): not Premium's — the Luckgram server transcribes it
+    const byLuckgram = isFreeTranscribeOn();
+    // * read before anything is awaited: the account the tab shows then
+    const {appMessagesManager} = bindManagersToSession(rootScope.managers);
+    if(!byLuckgram && !rootScope.getPremium()) {
       toastNew({
         langPackKey: 'AudioAndVideoTranscription.PremiumAlert',
         langPackArguments: [anchorCallback(() => {
@@ -225,13 +231,36 @@ export function wrapRoundVideoBubble({
       transcribe.append(spinner);
       const transcribedText = document.createElement('div');
       transcribedText.classList.add('video-transcribed-text');
-      try {
-        const transcribeResult = await rootScope.managers.appMessagesManager.transcribeAudio(message, true);
-        if(!transcribeResult.text) throw '';
-        transcribedText.innerText = transcribeResult.text;
-      } catch(err) {
-        transcribedText.append(i18n('Chat.Voice.Transribe.Error'));
-      }
+      const fill = async() => {
+        try {
+          const transcribeResult = byLuckgram ?
+            {text: await transcribeMessage(message as Message.message)} :
+            await appMessagesManager.transcribeAudio(message, true);
+          if(!transcribeResult.text) throw '';
+          transcribedText.prepend(transcribeResult.text);
+        } catch(err) {
+          if(!byLuckgram) {
+            transcribedText.prepend(i18n('Chat.Voice.Transribe.Error'));
+            return;
+          }
+
+          // * "转写失败 · 重试": pressed, it asks again
+          toast(getVoiceErrorText(err));
+          const retry = document.createElement('span');
+          retry.classList.add('luckgram-transcribe-retry');
+          retry.setAttribute('role', 'button');
+          retry.textContent = getVoiceRetryText();
+          retry.addEventListener('click', (e) => {
+            e.stopPropagation();
+            retry.remove();
+            const again = new SpinnerElement();
+            transcribe.append(again);
+            fill().finally(() => again.remove());
+          }, {once: true});
+          transcribedText.prepend(retry);
+        }
+      };
+      await fill();
       audioMessageContainer.append(transcribedText);
       transcribedText.append(audioSentTime);
       transcribedText.append(createElementFromMarkup(`<span class="clearfix"></span>`));
