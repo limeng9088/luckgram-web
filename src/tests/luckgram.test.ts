@@ -259,3 +259,102 @@ describe('luckgram: one address for the production site', () => {
     expect(description).toMatch(/not an official Telegram app/);
   });
 });
+
+// ---- luckgram-specs#167: what is sent to a browser does not read as Telegram Web
+import {
+  LUCKGRAM_TILE_COLOR, brandEmbedMessages, brandTileColor, extractShell, findFingerprints
+} from '../../scripts/luckgram/fingerprint.mjs';
+
+describe('luckgram: the HTML that is sent', () => {
+  const DESCRIPTION = 'Luckgram is an independent third-party client that uses the Telegram API. It is not an official Telegram app.';
+  const built = [
+    '<!doctype html>',
+    '<html>',
+    '  <head>',
+    '    <!-- What the page itself may load besides its own files -->',
+    '    <title>Luckgram</title>',
+    `    <meta name="description" content="${DESCRIPTION}">`,
+    '    <meta name="msapplication-TileColor" content="#2d89ef">',
+    '    <script type="module" crossorigin src="./fAbCdEfGh.js"></script>',
+    '  </head>',
+    '  <body class="animation-level-2 has-auth-pages">',
+    '    <svg><path id="logo" d="M0 0"/></svg>',
+    '    <!-- hidden until the chat UI exists -->',
+    '    <div class="whole page-chats" id="page-chats"><div class="tabs-tab sidebar-left" id="column-left">it\'s "here"</div></div>',
+    '  </body>',
+    '</html>'
+  ].join('\n');
+
+  test('upstream\'s skeleton leaves index.html for a script that puts it back as it was, before the app\'s script', () => {
+    const {html, shellName, shellCode} = extractShell(built);
+    expect(html).not.toMatch(/page-chats|sidebar-left|has-auth-pages|<!--/);
+    expect(html).toContain('<body>');
+    expect(shellName).toMatch(/^f[A-Za-z0-9_-]{8}\.js$/);
+    expect(html.indexOf(shellName)).toBeGreaterThan(-1);
+    expect(html.indexOf(shellName)).toBeLessThan(html.indexOf('fAbCdEfGh.js'));
+
+    // * run it against a document: the same class, the same elements, in the same order
+    document.body.className = '';
+    document.body.innerHTML = '';
+    new Function(shellCode)();
+    expect(document.body.className).toBe('animation-level-2 has-auth-pages');
+    expect([...document.body.children].map((element) => element.tagName.toLowerCase())).toEqual(['svg', 'div']);
+    expect(document.getElementById('column-left').textContent).toBe('it\'s "here"');
+    expect(document.querySelector('svg #logo')).toBeTruthy();
+    expect(document.body.innerHTML).not.toContain('<!--');
+    document.body.innerHTML = '';
+    document.body.className = '';
+
+    // * the same page gives the same script: its name is its content's
+    expect(extractShell(built).shellName).toBe(shellName);
+  });
+
+  test('a page it does not understand stops the build instead of going out half done', () => {
+    expect(() => extractShell(built.replace('<svg>', '<script src="x.js"></script><svg>'))).toThrow(/<script> inside <body>/);
+    expect(() => extractShell('<html><head></head></html>')).toThrow(/no <body>/);
+    expect(() => extractShell(built.replace('    <script type="module" crossorigin src="./fAbCdEfGh.js"></script>\n', ''))).toThrow(/not in <head>/);
+  });
+
+  test('the tile colour and the embed frame\'s messages are Luckgram\'s', () => {
+    expect(brandTileColor('<TileColor>#2d89ef</TileColor> content="#2D89EF"')).toBe(`<TileColor>${LUCKGRAM_TILE_COLOR}</TileColor> content="${LUCKGRAM_TILE_COLOR}"`);
+    expect(brandEmbedMessages('type!==`tweb-embed-html`;post({type:"tweb-embed-ready"})')).toBe('type!==`lg-embed-html`;post({type:"lg-embed-ready"})');
+  });
+
+  describe('the check that none of it comes back', () => {
+    const clean = () => ({
+      html: brandTileColor(extractShell(built).html),
+      files: ['index.html', 'fAbCdEfGh.js', 'fQwErTyUi.css', 'fAbCdEfGh.js.map', 'assets/img/logo.svg', 'recorder.min.js'],
+      texts: {'site.webmanifest': `{"name":"Luckgram","description": "${DESCRIPTION}"}`, 'browserconfig.xml': `<TileColor>${LUCKGRAM_TILE_COLOR}</TileColor>`},
+      channel: 'dev'
+    });
+
+    test('a site that went through it has nothing to report', () => {
+      expect(findFingerprints(clean())).toEqual([]);
+    });
+
+    test('the page as upstream builds it is reported, item by item', () => {
+      const found = findFingerprints({...clean(), html: built}).join('\n');
+      expect(found).toMatch(/has comments/);
+      expect(found).toMatch(/tile colour/);
+      expect(found).toMatch(/skeleton \(page-chats\)/);
+      expect(found).toMatch(/skeleton \(sidebar-left\)/);
+    });
+
+    test('"Telegram" anywhere but in the description; upstream\'s names', () => {
+      const site = clean();
+      expect(findFingerprints({...site, html: site.html.replace('<title>Luckgram</title>', '<title>Sign in to Telegram</title>')}).join('\n')).toMatch(/says "Telegram" outside the description/);
+      expect(findFingerprints({...site, html: site.html.replace('</head>', '<meta name="generator" content="tweb"></head>')}).join('\n')).toMatch(/names upstream/);
+      expect(findFingerprints({...site, texts: {'site.webmanifest': '{"name":"Telegram Web"}'}}).length).toBeGreaterThan(0);
+      expect(findFingerprints({...site, texts: {'site.webmanifest': '{"name":"Luckgram","short_name":"Telegram"}'}}).join('\n')).toMatch(/outside the description/);
+    });
+
+    test('files named for what they are instead of by their hash; source maps in production', () => {
+      const site = clean();
+      expect(findFingerprints({...site, files: [...site.files, 'telegramMeWebManager-DcZfJQi7.js']}).join('\n')).toMatch(/named after upstream/);
+      expect(findFingerprints({...site, files: [...site.files, 'appImManager-B3KLZ58p.js']}).join('\n')).toMatch(/carries upstream's name/);
+      expect(findFingerprints({...site, files: [...site.files, 'addToFolderDropdownMenu-CcHAQGJF.css']}).join('\n')).toMatch(/carries upstream's name/);
+      expect(findFingerprints({...site, channel: 'prod'}).join('\n')).toMatch(/production site carries a source map/);
+      expect(findFingerprints({...site, channel: 'prod', files: site.files.filter((file) => !file.endsWith('.map'))})).toEqual([]);
+    });
+  });
+});

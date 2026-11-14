@@ -52,6 +52,12 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   pull request to a preview (`https://<branch>.luckgram-web-dev.pages.dev`) that is linked in the pull request.
 - `.github/workflows/release.yml` — run by hand with a commit of `master`: deploys the production address
   (Cloudflare Pages project `luckgram-web`). Nothing else deploys production.
+- What is deployed does not read as Telegram Web (luckgram-specs#167; `scripts/luckgram/fingerprint.mjs`,
+  applied by `assemble.mjs`, checked by `check-site.mjs`). Upstream's static skeleton is not in `index.html`: a
+  script (`f<hash>.js`, the first one the page loads) puts it into the document unchanged, so the app runs as
+  upstream wrote it. Bundle files are named `f<hash>.<ext>` and nothing else (`vite.config.ts`), comments are
+  stripped, the tile colour is Luckgram's, and a production build carries no source maps. To find a file of a
+  development build by its source name, read its `.map`.
 - The deployed page only talks to Telegram's servers and Luckgram's own domains; the
   Content-Security-Policy in `scripts/luckgram/headers.mjs` enforces it.
 
