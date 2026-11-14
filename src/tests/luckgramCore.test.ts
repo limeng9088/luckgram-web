@@ -18,7 +18,7 @@ import {
   MAX_DISMISSED, dismissAnnouncement, parseAnnouncements, parseDismissed, pickAnnouncement, shouldRefreshAnnouncements
 } from '@/luckgram/core/announcementsLogic';
 import {FEATURES, FEATURE_GROUPS, LuckgramFeature, getVisibleFeatures, isFeatureLocallyEnabled} from '@/luckgram/core/features';
-import {shouldClearOnLogout} from '@/luckgram/core/init';
+import {LUCKGRAM_CLEAR_PENDING_KEY, finishLuckgramLogout, onLuckgramLoggingOut, shouldClearOnLogout} from '@/luckgram/core/logout';
 import {getLuckgramApiUrls} from '../../scripts/luckgram/vite-plugin.mjs';
 
 const MAIN = 'https://api-dev.luckgram.cc';
@@ -133,6 +133,100 @@ describe('luckgram settings', () => {
     expect(shouldClearOnLogout(undefined)).toBe(true);
     expect(shouldClearOnLogout(1)).toBe(false);
     expect(shouldClearOnLogout(3)).toBe(false);
+  });
+
+  describe('logging out', () => {
+    const makeKeyValue = () => {
+      const map = new Map<string, string>();
+      return {
+        map,
+        getItem: (key: string) => map.has(key) ? map.get(key) : null,
+        setItem: (key: string, value: string) => { map.set(key, value); },
+        removeItem: (key: string) => { map.delete(key); }
+      };
+    };
+
+    const makeFilled = async(name: string, factory = new IDBFactory()) => {
+      const store = makeStore(new LuckgramIndexedDBStorage(factory, name));
+      await store.ready;
+      await store.set('debug_demo', true);
+      await store.setPrivate('device_token', 'secret');
+      return {store, factory};
+    };
+
+    test('the last account: the settings and the token are gone before the page reloads', async() => {
+      const {store, factory} = await makeFilled('lg-logout-last');
+      const keyValue = makeKeyValue();
+      await onLuckgramLoggingOut(0, store, keyValue, 'en');
+
+      const reopened = makeStore(new LuckgramIndexedDBStorage(factory, 'lg-logout-last'));
+      await reopened.ready;
+      expect(reopened.has('debug_demo')).toBe(false);
+      expect(reopened.getPrivate('device_token')).toBeUndefined();
+      expect(keyValue.map.has(LUCKGRAM_CLEAR_PENDING_KEY)).toBe(false);
+    });
+
+    test('a session ended elsewhere and a forced log out of everything say the same', async() => {
+      for(const accountsLeft of [0, undefined]) {
+        const {store} = await makeFilled('lg-logout-' + accountsLeft);
+        await onLuckgramLoggingOut(accountsLeft, store, makeKeyValue(), 'en');
+        expect(store.getPrivate('device_token')).toBeUndefined();
+      }
+    });
+
+    test('another account is still signed in: everything stays, the language too', async() => {
+      const {store} = await makeFilled('lg-logout-one-of-two');
+      const keyValue = makeKeyValue();
+      keyValue.setItem('lg_lang_followed', '1');
+      await onLuckgramLoggingOut(1, store, keyValue, 'zh-hans-raw');
+      expect(store.getBool('debug_demo', false)).toBe(true);
+      expect(store.getPrivate('device_token')).toBe('secret');
+      expect(keyValue.map.get('lg_lang_followed')).toBe('1');
+      expect(keyValue.map.has('lg_lang_restore')).toBe(false);
+    });
+
+    test('a page that reloaded before the clearing was done finishes it at its next start', async() => {
+      const {store, factory} = await makeFilled('lg-logout-cut');
+      const keyValue = makeKeyValue();
+      // * the clearing never comes to an end in this page
+      const never = onLuckgramLoggingOut(0, {clear: () => new Promise<void>(() => {})}, keyValue, 'en');
+      expect(keyValue.map.get(LUCKGRAM_CLEAR_PENDING_KEY)).toBe('1');
+      void never;
+
+      const next = makeStore(new LuckgramIndexedDBStorage(factory, 'lg-logout-cut'));
+      await finishLuckgramLogout(next, keyValue);
+      expect(next.getPrivate('device_token')).toBeUndefined();
+      expect(next.has('debug_demo')).toBe(false);
+      expect(keyValue.map.has(LUCKGRAM_CLEAR_PENDING_KEY)).toBe(false);
+      void store;
+    });
+
+    test('nothing is cleared at a start that follows no log out', async() => {
+      const {store} = await makeFilled('lg-logout-none');
+      await finishLuckgramLogout(store, makeKeyValue());
+      expect(store.getPrivate('device_token')).toBe('secret');
+    });
+
+    test('a storage that fails does not hold the log out up', async() => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      await expect(onLuckgramLoggingOut(0, {clear: () => Promise.reject(new Error('no'))}, makeKeyValue(), 'en')).resolves.toBeUndefined();
+      await expect(onLuckgramLoggingOut(0, {clear: async() => {}}, undefined, 'en')).resolves.toBeUndefined();
+      warn.mockRestore();
+    });
+
+    test('the language of the last account is kept for the sign-in page; English needs nothing', async() => {
+      const keyValue = makeKeyValue();
+      keyValue.setItem('lg_lang_followed', '1');
+      await onLuckgramLoggingOut(0, {clear: async() => {}}, keyValue, 'zh-hans-raw');
+      expect(keyValue.map.get('lg_lang_restore')).toBe('zh-hans-raw');
+      expect(keyValue.map.has('lg_lang_followed')).toBe(false);
+
+      const english = makeKeyValue();
+      english.setItem('lg_lang_followed', '1');
+      await onLuckgramLoggingOut(0, {clear: async() => {}}, english, 'en');
+      expect(english.map.get('lg_lang_followed')).toBe('1');
+      expect(english.map.has('lg_lang_restore')).toBe(false);
+    });
   });
 });
 

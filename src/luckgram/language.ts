@@ -3,11 +3,12 @@
  * the user switching, the sign-in page included; any other browser stays in English.
  *
  * Only until a language was chosen: the first successful switch (ours, or the user's in Settings)
- * is remembered, and from then on the stored language pack is the user's.
+ * is remembered, and from then on the stored language pack is the user's. Logging the last account
+ * out drops that pack: the language it was in is taken up again by the sign-in page.
  */
 
 import {LUCKGRAM_ZH_LANG_CODE} from '@/luckgram/config';
-import {LUCKGRAM_LANG_FOLLOWED_KEY as FOLLOWED_KEY, isLuckgramBrowserChinese} from '@/luckgram/text';
+import {LUCKGRAM_LANG_FOLLOWED_KEY as FOLLOWED_KEY, LUCKGRAM_LANG_RESTORE_KEY as RESTORE_KEY, isLuckgramBrowserChinese} from '@/luckgram/text';
 
 type LangPackLike = {lang_code: string};
 type I18nLike = {
@@ -36,26 +37,53 @@ async function apply(I18n: I18nLike, langCode: string) {
  * on with its own language pack update
  */
 export function followBrowserLanguage(langPack: LangPackLike, I18n: I18nLike): Promise<void> | undefined {
+  let langCode: string;
   try {
     if(localStorage.getItem(FOLLOWED_KEY)) return;
 
     // * the bundled pack is English; anything else is a language somebody picked
-    if(langPack.lang_code !== 'en' || !isLuckgramBrowserChinese()) {
-      localStorage.setItem(FOLLOWED_KEY, '1');
+    if(langPack.lang_code === 'en') {
+      const remembered = localStorage.getItem(RESTORE_KEY);
+      langCode = LANG_CODE_RE.test(remembered || '') ? remembered : (isLuckgramBrowserChinese() ? LUCKGRAM_ZH_LANG_CODE : undefined);
+    }
+
+    if(!langCode) {
+      settle();
       return;
     }
   } catch(err) {
     return;
   }
 
-  return apply(I18n, LUCKGRAM_ZH_LANG_CODE).then(() => {
+  return apply(I18n, langCode).then(() => {
     try {
-      localStorage.setItem(FOLLOWED_KEY, '1');
+      settle();
     } catch(err) {}
   }, (err) => {
     // * asked again by the next start: no connection yet, or the pack could not be loaded
-    console.warn('[luckgram] the Chinese language pack was not applied', err);
+    console.warn('[luckgram] the language pack was not applied', langCode, err);
   });
+}
+
+const LANG_CODE_RE = /^[a-z0-9][a-z0-9-]{1,31}$/i;
+
+function settle() {
+  localStorage.setItem(FOLLOWED_KEY, '1');
+  localStorage.removeItem(RESTORE_KEY);
+}
+
+/**
+ * The last account is being logged out, and upstream drops the stored language pack with it: the
+ * page would come back in the bundled English and, the language being settled, stay so
+ * (luckgram-specs#139). The language in use is kept for the next start instead, which takes it up
+ * as it once followed the browser. English needs nothing: it is what the page comes back in.
+ */
+export function rememberLanguageForSignIn(langCode: string, storage: Pick<Storage, 'setItem' | 'removeItem'>) {
+  try {
+    if(!langCode || langCode === 'en' || !LANG_CODE_RE.test(langCode)) return;
+    storage.setItem(RESTORE_KEY, langCode);
+    storage.removeItem(FOLLOWED_KEY);
+  } catch(err) {}
 }
 
 /**
