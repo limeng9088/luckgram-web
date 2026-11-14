@@ -22,8 +22,9 @@ import fs from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {createRequire} from 'module';
-import {getLuckgramBuildInfo} from './vite-plugin.mjs';
+import {getLuckgramBuildInfo, luckgramHtmlContext} from './vite-plugin.mjs';
 import {buildHeadersFile} from './headers.mjs';
+import {brandEmbedMessages, brandTileColor, extractShell, stripComments} from './fingerprint.mjs';
 
 const require = createRequire(import.meta.url);
 const keepAsset = require('../../keepAsset.js');
@@ -85,7 +86,7 @@ for(const name of ['site.webmanifest', 'site_apple.webmanifest']) {
   manifest.name = 'Luckgram';
   manifest.short_name = 'Luckgram';
   manifest.id = '/';
-  manifest.description = 'Luckgram — a fast, secure messenger for your Telegram account, with AI built in.';
+  manifest.description = luckgramHtmlContext().description;
   manifest.theme_color = '#ffffff';
   manifest.background_color = '#ffffff';
   // * links of t.me open in an installed app only when t.me says so about the app's origin, which it does not about ours
@@ -96,7 +97,33 @@ for(const name of ['site.webmanifest', 'site_apple.webmanifest']) {
   fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
 }
 
-// 5. this deployment
+// 5. nothing of it reads as Telegram Web (fingerprint.mjs, luckgram-specs#167)
+{
+  const indexFile = path.join(outDir, 'index.html');
+  const {html, shellName, shellCode} = extractShell(fs.readFileSync(indexFile, 'utf8'));
+  fs.writeFileSync(indexFile, brandTileColor(html));
+  fs.writeFileSync(path.join(outDir, shellName), shellCode);
+
+  const browserconfig = path.join(outDir, 'browserconfig.xml');
+  fs.writeFileSync(browserconfig, brandTileColor(fs.readFileSync(browserconfig, 'utf8')));
+
+  // * the embed frame and the script that talks to it name their messages the same way, whatever the name
+  const embed = path.join(outDir, 'embed.html');
+  fs.writeFileSync(embed, brandEmbedMessages(stripComments(fs.readFileSync(embed, 'utf8')).replace(/^\s*\/\/.*$/gm, '')));
+  let renamed = 0;
+  for(const name of fs.readdirSync(outDir)) {
+    if(!name.endsWith('.js')) continue;
+    const file = path.join(outDir, name);
+    const text = fs.readFileSync(file, 'utf8');
+    if(!text.includes('tweb-embed-')) continue;
+    fs.writeFileSync(file, brandEmbedMessages(text));
+    ++renamed;
+  }
+
+  if(!renamed) fail('no script names the embed frame\'s messages (tweb-embed-…) — upstream changed them, update scripts/luckgram/fingerprint.mjs');
+}
+
+// 6. this deployment
 fs.writeFileSync(path.join(outDir, 'luckgram-version'), JSON.stringify({
   commit: info.commit,
   build: info.build,
@@ -109,7 +136,7 @@ fs.writeFileSync(path.join(outDir, 'robots.txt'), info.channel === 'prod' ?
   'User-agent: *\nAllow: /\n' :
   'User-agent: *\nDisallow: /\n');
 
-// 6. Cloudflare Pages' limits: 20 000 files, 25 MiB each
+// 7. Cloudflare Pages' limits: 20 000 files, 25 MiB each
 let files = 0, bytes = 0;
 (function walk(dir) {
   for(const entry of fs.readdirSync(dir, {withFileTypes: true})) {

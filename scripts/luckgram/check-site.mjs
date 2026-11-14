@@ -15,6 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {getLuckgramBuildInfo} from './vite-plugin.mjs';
+import {findFingerprints} from './fingerprint.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const siteDir = path.resolve(rootDir, process.argv[2] || 'tmp/luckgram-site');
@@ -50,12 +51,31 @@ for(const name of ['site.webmanifest', 'site_apple.webmanifest']) {
   if(/Telegram Web|WebK|telegram\.org/.test(JSON.stringify(manifest))) errors.push(`${name} names Telegram Web`);
 }
 
-const serviceWorkers = scripts.filter((name) => /^sw-.*\.js$/.test(name));
+// * files are named by their hash alone (vite.config.ts): the service worker is known by what it does
+const serviceWorkers = scripts.filter((name) => read(name).includes('luckgramAssets') && read(name).includes('showNotification'));
 if(serviceWorkers.length !== 1) errors.push(`expected one service worker, found ${serviceWorkers.length}`);
 for(const name of serviceWorkers) {
   const text = read(name);
   if(/showNotification\(\s*[`'"]Telegram/.test(text)) errors.push(`${name}: a notification is titled Telegram`);
   if(!text.includes('luckgramAssets')) errors.push(`${name}: the assets cache is not Luckgram's`);
+}
+
+// 2b. nothing that is sent reads as Telegram Web (fingerprint.mjs, luckgram-specs#167)
+{
+  /** @type {string[]} */
+  const files = [];
+  (function walk(dir, prefix) {
+    for(const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+      if(entry.isDirectory()) walk(path.join(dir, entry.name), prefix + entry.name + '/');
+      else files.push(prefix + entry.name);
+    }
+  })(siteDir, '');
+
+  const texts = Object.fromEntries(['site.webmanifest', 'site_apple.webmanifest', 'browserconfig.xml', 'embed.html'].map((name) => [name, read(name)]));
+  errors.push(...findFingerprints({html, files, texts, channel: info.channel}));
+
+  const shell = /<script type="module" crossorigin src="\.\/(f[A-Za-z0-9_-]{8}\.js)"><\/script>/.exec(html)?.[1];
+  if(!shell || !read(shell).startsWith('document.body.className=')) errors.push('index.html does not load the script that builds the page\'s skeleton first');
 }
 
 // 3. the channel
