@@ -11,7 +11,8 @@ describe('luckgram AI writing', () => {
     expect(WRITING_EFFECTS.map((item) => item.effect)).toEqual(['polish', 'formal', 'friendly', 'shorter', 'grammar']);
     expect(WRITING_EFFECTS.map((item) => item.title[0])).toEqual(['润色', '更正式', '更友好', '更简短', '修正语法']);
     expect(WRITING_EFFECTS[0].done[0]).toBe('已润色');
-    for(const item of WRITING_EFFECTS) expect(item.title[1] && item.done[0] && item.done[1]).toBeTruthy();
+    // * every item has an icon: the menu's texts line up
+    for(const item of WRITING_EFFECTS) expect(item.icon && item.title[1] && item.done[0] && item.done[1]).toBeTruthy();
   });
 
   test('over 4000 characters is too long', () => {

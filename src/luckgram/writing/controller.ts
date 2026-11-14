@@ -13,7 +13,6 @@ import type ChatInput from '@components/chat/input';
 import {ButtonMenuItemOptionsVerifiable, ButtonMenuSync} from '@components/buttonMenu';
 import {mountSendMenu} from '@components/chat/sendContextMenu';
 import deriveEditorDraftContent from '@components/chat/inputEditor/draftContent';
-import Icon from '@components/icon';
 import {toast} from '@components/toast';
 import contextMenuController from '@helpers/contextMenuController';
 import {attachClickEvent} from '@helpers/dom/clickEvent';
@@ -127,8 +126,8 @@ export default class LuckgramAiWriting {
     const container = this.input.btnSendContainer;
     if(!container?.parentElement || this.button) return;
 
-    this.button = this.input.createButtonIcon('luckgram-ai-button', {noRipple: true});
-    this.button.append(Icon('ai_star1'));
+    // * a glyph of the icon font's own size, like the row's other buttons
+    this.button = this.input.createButtonIcon('edit_stars luckgram-ai-button', {noRipple: true});
     this.button.classList.add('hide');
     this.button.title = lgText('AI', 'AI');
     this.button.setAttribute('aria-label', lgText('AI 写作与回复', 'AI writing and reply'));
@@ -162,8 +161,8 @@ export default class LuckgramAiWriting {
   private getItems(): AiMenuItem[] {
     const empty = this.input.isInputEmpty();
     const rich = !empty && this.isRichDraft();
-    const builtIn: AiMenuItem[] = this.writingOn ? WRITING_EFFECTS.map(({effect, title}, index) => ({
-      key: 'writing_' + effect, title, order: ORDER_EFFECTS + index * 10, onClick: () => this.applyEffect(effect)
+    const builtIn: AiMenuItem[] = this.writingOn ? WRITING_EFFECTS.map(({effect, title, icon}, index) => ({
+      key: 'writing_' + effect, title, icon: icon as Icon, order: ORDER_EFFECTS + index * 10, onClick: () => this.applyEffect(effect)
     })) : [];
 
     // * AI reply is on its own switch; anything else registered rides on AI writing
@@ -174,7 +173,8 @@ export default class LuckgramAiWriting {
   /** W5's "翻译" and "翻译成…", when a narrow window has no button for them. */
   private getTranslateButtons(): ButtonMenuItemOptionsVerifiable[] {
     if(!isTranslateInAiMenu() || this.input.isInputEmpty()) return [];
-    return (this.input.luckgramTranslateOut?.getMenuButtons() || []).filter((button) => button.verify?.() !== false);
+    // * "翻译" first, then "翻译成…": the send button's menu has them the other way round
+    return (this.input.luckgramTranslateOut?.getMenuButtons() || []).filter((button) => button.verify?.() !== false).reverse();
   }
 
   /** The field or the chat changed (input.ts: updateSendBtn). */
@@ -212,7 +212,8 @@ export default class LuckgramAiWriting {
 
     const host = this.getHost();
     const buttons: ButtonMenuItemOptionsVerifiable[] = items.map((item) => ({
-      icon: item.icon,
+      // * an item registered without one gets a plain mark, so that every text starts at the same place
+      icon: item.icon || 'edit_stars',
       regularText: lgText(...item.title),
       onClick: () => {
         try {

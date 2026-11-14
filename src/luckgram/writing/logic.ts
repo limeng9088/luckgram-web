@@ -15,12 +15,13 @@ export const REPLY_CANDIDATES = 3;
 export type WritingEffect = 'polish' | 'formal' | 'friendly' | 'shorter' | 'grammar';
 
 /** In the menu's order. `done`: the bar's words once the field has the result. [中文, English] */
-export const WRITING_EFFECTS: {effect: WritingEffect, title: [string, string], done: [string, string]}[] = [
-  {effect: 'polish', title: ['润色', 'Polish'], done: ['已润色', 'Polished']},
-  {effect: 'formal', title: ['更正式', 'More formal'], done: ['已改得更正式', 'Made more formal']},
-  {effect: 'friendly', title: ['更友好', 'Friendlier'], done: ['已改得更友好', 'Made friendlier']},
-  {effect: 'shorter', title: ['更简短', 'Shorter'], done: ['已改得更简短', 'Made shorter']},
-  {effect: 'grammar', title: ['修正语法', 'Fix grammar'], done: ['已修正语法', 'Grammar fixed']}
+/** `icon`: a name of upstream's icon font — every item of the menu has one, so their texts line up. */
+export const WRITING_EFFECTS: {effect: WritingEffect, icon: string, title: [string, string], done: [string, string]}[] = [
+  {effect: 'polish', icon: 'edit_stars', title: ['润色', 'Polish'], done: ['已润色', 'Polished']},
+  {effect: 'formal', icon: 'ai_style_tone', title: ['更正式', 'More formal'], done: ['已改得更正式', 'Made more formal']},
+  {effect: 'friendly', icon: 'smile', title: ['更友好', 'Friendlier'], done: ['已改得更友好', 'Made friendlier']},
+  {effect: 'shorter', icon: 'collapse', title: ['更简短', 'Shorter'], done: ['已改得更简短', 'Made shorter']},
+  {effect: 'grammar', icon: 'check', title: ['修正语法', 'Fix grammar'], done: ['已修正语法', 'Grammar fixed']}
 ];
 
 /** The order of the built-in items; an item registered from outside picks its own (smaller first). */

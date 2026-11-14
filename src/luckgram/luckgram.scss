@@ -602,6 +602,10 @@ body.has-auth-pages {
 
 // * the panel over the field that a feature fills (AI reply's candidates)
 .luckgram-ai-panel {
+  // * as wide as the field itself, whatever the row's own alignment
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
   max-height: 50vh;
   overflow-y: auto;
   border-bottom: 1px solid var(--border-color);
