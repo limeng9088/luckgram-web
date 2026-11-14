@@ -21,6 +21,7 @@ import Icon from '@components/icon';
 import currencyStarIcon from '@components/currencyStarIcon';
 import {luckgramBrandString} from '@/luckgram/brandStrings';
 import {luckgramHtmlLang, luckgramPluralLocale, setLuckgramLangCode} from '@/luckgram/text';
+import {getLuckgramZhTexts, luckgramZhString} from '@/luckgram/zhOverlay';
 
 export const langPack: {[actionType: string]: LangPackKey} = {
   'messageActionChatCreate': 'ActionCreateGroup',
@@ -346,8 +347,10 @@ namespace I18n {
     untranslatedKeys.clear();
 
     setLuckgramLangCode(langPack.lang_code);
+    // * Luckgram: Chinese for what Telegram's Chinese pack lacks; applied again when the texts were still on their way
+    const zh = getLuckgramZhTexts(langPack.lang_code, () => applyLangPack(langPack));
     for(const string of langPack.strings) {
-      strings.set(string.key as LangPackKey, luckgramBrandString(string, langPack.lang_code));
+      strings.set(string.key as LangPackKey, luckgramBrandString(luckgramZhString(string as any, zh) as typeof string, langPack.lang_code));
     }
 
     const rtl = langPack.rtl ?? isRTLLangCode(langPack.lang_code);

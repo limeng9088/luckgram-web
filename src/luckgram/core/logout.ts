@@ -16,6 +16,9 @@ import LuckgramSettings from '@/luckgram/core/settings';
 import {rememberLanguageForSignIn} from '@/luckgram/language';
 import {getLuckgramLangCode} from '@/luckgram/text';
 
+/** The connection setting (relay/page.ts). */
+export const LUCKGRAM_ROUTE_MODE_KEY = 'lg_route_mode';
+
 /** Set while the values are to be cleared: a page that went away before it was done finishes at its next start. */
 export const LUCKGRAM_CLEAR_PENDING_KEY = 'lg_clear_pending';
 
@@ -52,6 +55,12 @@ export function onLuckgramLoggingOut(
   langCode: string = getLuckgramLangCode()
 ): Promise<void> {
   if(!shouldClearOnLogout(accountsLeft)) return Promise.resolve();
+
+  // * the connection setting lives in localStorage, read before the first connection (W3 需求 3): back to automatic.
+  // * What connected last (lg_route_preferred) is no setting and stays
+  try {
+    storage?.removeItem(LUCKGRAM_ROUTE_MODE_KEY);
+  } catch(err) {}
 
   // * upstream drops the stored language pack with the last account: the sign-in page comes back in the same language
   rememberLanguageForSignIn(langCode, storage);
