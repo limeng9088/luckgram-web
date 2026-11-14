@@ -11,6 +11,7 @@ import {
   readKeptAiSendStyle
 } from '@components/chat/aiSendStyles';
 import getAiEditorRequest from '@components/richMessageInput/aiRequest';
+import LuckgramTranslateOut from '@/luckgram/translate/outgoing';
 import type {ComposeMessageWithAiResult} from '@appManagers/aiTonesManager';
 import AiSendSparkles from '@components/chat/aiSendSparkles';
 import AiRewriteEffect from '@components/chat/aiRewriteEffect';
@@ -435,6 +436,8 @@ export default class ChatInput {
 
   private btnToggleReplyMarkup: HTMLButtonElement;
   public btnSendContainer: HTMLDivElement;
+  // * Luckgram (W5): the draft translated before it is sent
+  public luckgramTranslateOut: LuckgramTranslateOut;
   /** layer 229: a bot is streaming text into this chat/topic and lets us stop it */
   private streamStoppable = false;
   private sendBtnIcon: ChatSendBtnIcon;
@@ -1832,7 +1835,9 @@ export default class ChatInput {
       }, {defer: true}));
     });
 
+    this.luckgramTranslateOut = new LuckgramTranslateOut(this);
     this.sendMenu = new SendMenu({
+      luckgramButtons: () => this.luckgramTranslateOut.getMenuButtons(),
       onSilentClick: () => {
         this.sendSilent = true;
         if(this.recording) this.recordingController.finishRecordingFromMenu();
@@ -1896,6 +1901,7 @@ export default class ChatInput {
     // Move the morphing send/record button into the input row as the last button.
     // btnCancelRecord is built above but intentionally not appended to the DOM.
     this.newMessageWrapper.append(this.btnSendContainer);
+    this.luckgramTranslateOut?.mount();
 
     // The voice + round-video recording panels are constructed and mounted by
     // ChatRecording (built in constructRecorder below): the voice panel is
@@ -5127,6 +5133,7 @@ export default class ChatInput {
   }
 
   public updateSendBtn() {
+    this.luckgramTranslateOut?.update();
     let icon: ChatSendBtnIcon;
 
     const isInputEmpty = this.isInputEmpty();
@@ -5251,6 +5258,7 @@ export default class ChatInput {
   }
 
   public onMessageSent(clearInput = true, clearReply?: boolean, skipReadHistory = false) {
+    this.luckgramTranslateOut?.reset();
     if(!skipReadHistory && !PEER_EXCEPTIONS.has(this.chat.type)) {
       this.managers.appMessagesManager.readAllHistory(this.chat.peerId, this.chat.threadId, true);
     }

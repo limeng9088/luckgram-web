@@ -52,7 +52,9 @@ export default class SendMenu {
     /** what the AI editor does to what is sent, when a request of it is saved for that */
     aiSendStyleLabel?: () => string,
     onSendWithoutAiStyleClick?: () => void,
-    onRemoveAiStyleClick?: () => void
+    onRemoveAiStyleClick?: () => void,
+    /** Luckgram (W5): "翻译成…" and "翻译" of what is typed */
+    luckgramButtons?: () => ButtonMenuItemOptionsVerifiable[]
   }) {
     this.middlewareHelper = options.middleware.create();
     this.createMenu();
@@ -103,7 +105,7 @@ export default class SendMenu {
       text: 'AiEditor.ApplyOnSend.SendAsIs',
       onClick: this.options.onSendWithoutAiStyleClick,
       verify: () => !!this.options.aiSendStyleLabel?.()
-    }, turnOffAiSendStyle, {
+    }, turnOffAiSendStyle, ...(this.options.luckgramButtons?.() || []), {
       icon: 'crossround',
       text: 'Effect.Remove',
       danger: true,

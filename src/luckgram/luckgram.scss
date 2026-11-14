@@ -328,3 +328,128 @@ body.has-auth-pages {
   flex-direction: column;
   flex: 0 0 auto;
 }
+
+// ---------------------------------------------------------------- W5: translation (specs#185)
+
+// * a received message's translation, in its bubble under the original
+.luckgram-translation {
+  clear: both;
+  margin-top: .375rem;
+  padding-top: .375rem;
+  border-top: 1px solid rgba(var(--primary-text-color-rgb, 0, 0, 0), .12);
+  text-align: start;
+
+  &-header {
+    font-size: .75rem;
+    line-height: 1.25;
+    color: var(--secondary-text-color);
+    margin-bottom: .125rem;
+    user-select: none;
+  }
+
+  &-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  &.is-loading &-text {
+    min-height: 1em;
+    border-radius: .25rem;
+    background: rgba(var(--primary-text-color-rgb, 0, 0, 0), .06);
+    animation: luckgram-translation-loading 1.2s ease-in-out infinite;
+  }
+
+  .bubble.is-out & {
+    border-top-color: rgba(var(--message-out-primary-color-rgb, 0, 0, 0), .2);
+
+    &-header {
+      color: var(--message-out-primary-color, var(--secondary-text-color));
+    }
+  }
+}
+
+@keyframes luckgram-translation-loading {
+  50% {
+    opacity: .4;
+  }
+}
+
+// * the one-tap icon beside somebody else's message: on hover with a mouse, always on a touch screen
+.luckgram-translate-button {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-start: calc(100% + .375rem);
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
+  color: #fff;
+  background-color: var(--message-highlighting-color, rgba(0, 0, 0, .3));
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 1;
+
+  // * upstream's own button of a long message sits at the same corner
+  .bubble.with-beside-button & {
+    inset-block-start: 2.75rem;
+  }
+
+  .bubble:hover &,
+  &.is-active,
+  html.is-touch &,
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+
+  &.is-active {
+    background-color: var(--primary-color);
+  }
+}
+
+// * the draft's translate button, left of the send button
+.luckgram-translate-out {
+  flex: 0 0 auto;
+
+  &.is-loading {
+    pointer-events: none;
+    animation: luckgram-translation-loading 1.2s ease-in-out infinite;
+  }
+}
+
+// * "已翻译成 西班牙语 · 撤销", over the message field
+.luckgram-translate-bar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .375rem 1rem;
+  font-size: .875rem;
+  line-height: 1.25rem;
+  color: var(--secondary-text-color);
+
+  &-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &-undo {
+    flex: 0 0 auto;
+    padding: 0 .25rem;
+    border: none;
+    background: none;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: var(--font-weight-bold, 500);
+    cursor: pointer;
+  }
+}

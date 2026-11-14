@@ -70,6 +70,7 @@ import cancelSelection from '@helpers/dom/cancelSelection';
 import {getRichQuoteSelection, makeRichQuoteOfSelection} from '@components/chat/richQuoteSelection';
 import {listenRichMessageCopy} from '@components/chat/richMessageCopy';
 import detectLanguageForTranslation from '@helpers/detectLanguageForTranslation';
+import {canTranslateInBubble, getTranslateMenuText, toggleMessageTranslation} from '@/luckgram/translate/incoming';
 import {getMessageSourceText} from '@stores/peerLanguage';
 import {showAdReport, showMessageReport} from '@components/popups/reportAd';
 import showAboutAdPopup from '@components/popups/aboutAd';
@@ -1266,7 +1267,24 @@ export default class ChatContextMenu {
       },
       verify: () => this.target.classList.contains('anchor-hashtag'),
       withSelection: true
-    }, {
+    }, (() => {
+      // * Luckgram (W5): the translation goes into the message's own bubble, for every account;
+      // * upstream's item below (a popup) stays for a selection, a poll, and when the feature is off
+      const item: ChatContextMenuButton = {
+        icon: 'premium_translate',
+        regularText: ' ',
+        onClick: () => {
+          const message = this.message as Message.message;
+          toggleMessageTranslation(this.chat.bubbles.getBubble(message.peerId, message.mid), message);
+        },
+        verify: () => {
+          if(this.selectedMessages || !canTranslateInBubble(this.message as Message.message, this.isTextSelected)) return false;
+          if(item.textElement) item.textElement.textContent = getTranslateMenuText(this.message as Message.message);
+          return true;
+        }
+      };
+      return item;
+    })(), {
       icon: 'premium_translate',
       text: 'TranslateMessage',
       onClick: async() => {
@@ -1299,7 +1317,7 @@ export default class ChatContextMenu {
           }, SolidJSHotReloadGuardProvider);
         }
       },
-      verify: () => !!this.messageLanguage
+      verify: () => !!this.messageLanguage && !canTranslateInBubble(this.message as Message.message, this.isTextSelected)
     }, {
       // * a transfer in a chat with someone: Grams back to them, as iOS offers it on the transfer itself
       icon: 'wallet',
