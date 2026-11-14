@@ -82,6 +82,23 @@ export function brandEmbedMessages(text) {
 }
 
 /**
+ * A file the build named by its hash alone (vite.config.ts: `f[hash].js`, `f[hash][extname]`). The hash
+ * is eight random letters, digits, `-` and `_`: among some thousands of files one spells "tweb" or
+ * "webk" every few dozen builds — `fBxztWeBW.js` failed a build on 2026-11-14. Such a name says
+ * nothing of upstream and is not looked at.
+ */
+const HASHED_NAME = /^f[A-Za-z0-9_-]{8}\.[a-z0-9]+$/;
+const HASHED_NAME_ANYWHERE = /\bf[A-Za-z0-9_-]{8}\.[a-z0-9]+\b/g;
+
+/**
+ * A text without the hashed files' names it refers to: what is left is what somebody wrote.
+ * @param {string} text
+ */
+export function withoutHashedNames(text) {
+  return text.replace(HASHED_NAME_ANYWHERE, '');
+}
+
+/**
  * What still reads as Telegram Web in a site that is about to be deployed.
  * @param {{
  *   html: string,
@@ -99,7 +116,8 @@ export function findFingerprints({html, files, texts = {}, channel}) {
   const mention = /.{0,40}telegram.{0,40}/i.exec(withoutDescriptions);
   if(mention) found.push(`index.html says "Telegram" outside the description: …${mention[0].replace(/\s+/g, ' ')}…`);
   if(/<!--/.test(html)) found.push('index.html has comments');
-  if(/tweb|webk\b|webogram/i.test(html)) found.push('index.html names upstream (tweb / WebK)');
+  // * not in a hashed file's name: a hash is random letters and now and then spells one of these
+  if(/tweb|webk\b|webogram/i.test(withoutHashedNames(html))) found.push('index.html names upstream (tweb / WebK)');
   if(UPSTREAM_TILE_COLOR.test(html)) found.push('index.html has upstream\'s tile colour');
   UPSTREAM_TILE_COLOR.lastIndex = 0;
 
@@ -109,7 +127,7 @@ export function findFingerprints({html, files, texts = {}, channel}) {
 
   for(const file of files) {
     const name = file.split('/').pop() || '';
-    if(/telegram|tweb|webk/i.test(name)) found.push(`a file is named after upstream: ${file}`);
+    if(!HASHED_NAME.test(name) && /telegram|tweb|webk/i.test(name)) found.push(`a file is named after upstream: ${file}`);
     if(channel === 'prod' && name.endsWith('.map')) found.push(`a production site carries a source map: ${file}`);
     // * a script or a style sheet of the bundle named for what it is, instead of by its hash
     if(!file.includes('/') && /^[A-Za-z][A-Za-z0-9_.@~]*-[A-Za-z0-9_-]{8}\.(js|css)$/.test(name)) {
@@ -118,7 +136,7 @@ export function findFingerprints({html, files, texts = {}, channel}) {
   }
 
   for(const [name, text] of Object.entries(texts)) {
-    if(/telegram\s*web|webk|tweb|webogram/i.test(text)) found.push(`${name} names upstream`);
+    if(/telegram\s*web|webk|tweb|webogram/i.test(withoutHashedNames(text))) found.push(`${name} names upstream`);
     if(UPSTREAM_TILE_COLOR.test(text)) found.push(`${name} has upstream's tile colour`);
     UPSTREAM_TILE_COLOR.lastIndex = 0;
     if(/\.webmanifest$/.test(name) && /telegram/i.test(text.replace(/"description":\s*"[^"]*third-party client[^"]*"/, ''))) {
