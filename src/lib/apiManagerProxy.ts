@@ -50,6 +50,7 @@ import getObjectKeysAndSort from '@helpers/object/getObjectKeysAndSort';
 import {reconcilePeer, reconcilePeers, resetPeers} from '@stores/peers';
 import {getCurrentAccount, setCurrentAccount} from '@lib/accounts/getCurrentAccount';
 import {ActiveAccountNumber} from '@lib/accounts/types';
+import {ACCOUNT_NUMBERS} from '@lib/accounts/constants';
 import {createProxiedManagersForAccount, getAccountManagers, getOtherAccountManagers} from '@lib/getProxiedManagers';
 import {takesCallEvent} from '@lib/calls/callAccount';
 import noop from '@helpers/noop';
@@ -1229,11 +1230,11 @@ class ApiManagerProxy extends MTProtoMessagePort {
 
   public sendAllStates(loadedStates: Awaited<ReturnType<ApiManagerProxy['loadAllStates']>>) {
     const promises: Promise<any>[] = [];
-    for(let i = 1; i <= 4; i++) {
-      const state = loadedStates[i as ActiveAccountNumber];
+    for(const accountNumber of ACCOUNT_NUMBERS) {
+      const state = loadedStates[accountNumber];
       const promise = this.invoke('state', {
         ...state,
-        accountNumber: i as ActiveAccountNumber
+        accountNumber
       });
 
       promises.push(promise);

@@ -305,3 +305,15 @@ body.has-auth-pages {
     white-space: nowrap;
   }
 }
+
+// * W4: the accounts in the main menu, from 6 on — a list of their own that scrolls (src/luckgram/accounts.ts)
+.luckgram-accounts-scroll {
+  max-height: min(45vh, 20rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  // * the menu's items are flex children of the menu; here they stack the same way
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}

@@ -50,7 +50,7 @@ import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
 import AccountController from '@lib/accounts/accountController';
 import {changeAccount} from '@lib/accounts/changeAccount';
 import {getValidatedAccount} from '@lib/accounts/getValidatedAccount';
-import {MAX_ACCOUNTS_FREE, MAX_ACCOUNTS_PREMIUM} from '@lib/accounts/constants';
+import {MAX_ACCOUNTS} from '@lib/accounts/constants';
 import sessionStorage from '@lib/sessionStorage';
 import replaceChildrenPolyfill from '@helpers/dom/replaceChildrenPolyfill';
 import listenForWindowPrint from '@helpers/dom/windowPrint';
@@ -654,8 +654,8 @@ if(import.meta.env.DEV || import.meta.env.VITE_PREVIEW) {
         AccountController.getAccountNumbers(),
         AccountController.getFreeAccountNumber()
       ]);
-      const hasSomeonePremium = await apiManagerProxy.hasSomeonePremium();
-      const maxAccountNumber = hasSomeonePremium ? MAX_ACCOUNTS_PREMIUM : MAX_ACCOUNTS_FREE;
+      // * Luckgram (W4): one limit, with Telegram Premium or without
+      const maxAccountNumber = MAX_ACCOUNTS;
 
       const currentAccount = getCurrentAccount();
       // * the first slot is left empty when Web A signs its account out, with its other accounts still there:

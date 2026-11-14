@@ -30,7 +30,10 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   `src/lib/appManagers/apiUpdatesManager.ts` (and its test `src/tests/changelogDelivery.test.ts`), `src/components/sidebarLeft/index.ts`,
   `src/components/sidebarLeft/tabs/settings.tsx`, `src/components/sidebarLeft/tabs/experimental.tsx`,
   `src/lib/mtproto/dcConfigurator.ts`, `src/lib/mtproto/transports/controller.ts`, `src/lib/mtproto/authorizer.ts`,
-  `src/lib/appManagers/createManagers.ts`, `scripts/import-graph.mjs`.
+  `src/lib/appManagers/createManagers.ts`, `scripts/import-graph.mjs`; for the 20 account slots (W4): `src/lib/accounts/constants.ts`,
+  `types.d.ts`, `getValidatedAccount.ts`, `accountController.ts`, `src/lib/sessionStorage.ts`,
+  `src/lib/appManagers/appManagersManager.ts` (a slot gets its managers only when it has an account or is worked in),
+  `apiManager.ts`, `appStoragesManager.ts`, `utils/state/loadState.ts`, `src/lib/apiManagerProxy.ts`, `src/lib/mainWorker/index.worker.ts`, `src/index.ts`.
   (`experimental.tsx` is back to upstream since W3 moved the connection mode to "Luckgram 功能".) `public/` (upstream's last committed bundle and its
   static files) is left as upstream has it; Luckgram's icons and manifest are laid over it when the site is
   assembled.
@@ -65,6 +68,33 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   local development build (`LUCKGRAM_CHANNEL=dev`) by its source name, read its `.map`.
 - The deployed page only talks to Telegram's servers and Luckgram's own domains; the
   Content-Security-Policy in `scripts/luckgram/headers.mjs` enforces it.
+
+### Trying a pull request
+
+There is no development site and no preview, so a pull request's site is tried on the tester's own computer.
+Every pull request build uploads it as an artifact, kept 3 days: the site exactly as a merge would release it
+(production channel, the real Telegram API credentials) and the script that serves it.
+
+```bash
+gh run download <run id> -R limeng9088/luckgram-web -D lgweb     # or: the run's page → Artifacts
+cd lgweb/luckgram-web-*                                           # holds site/ and serve.mjs
+node serve.mjs                                                    # http://localhost:8080 — another port: node serve.mjs site 8090
+```
+
+Node 18 or newer is all it needs. It serves the files with the site's own headers (the deployed
+Content-Security-Policy included) on this computer only; `http://localhost` is a secure context, so the service
+worker, notifications and installing the app work. Stop it with Ctrl+C.
+
+What differs from the deployed site, because the origin is `http://localhost:<port>` and not the site's:
+
+- **Sign in again**: storage is per origin, so nothing of `web.luckgram.cc` is there — and nothing done here
+  touches the sessions there. Use test accounts. Another port is another origin, with storage of its own.
+- **Telegram has to be reachable directly.** The relays let only the site's origins in, so "Relay only" does not
+  connect and "Automatic" ends up on Telegram's own address.
+- **Luckgram's API does not answer** (`api.luckgram.cc`, cross-origin requests from localhost are refused):
+  remote configuration, announcements and AI stay empty, and the console shows the refused requests. Telegram
+  itself — chats, accounts, notifications — is not affected.
+- Passkey sign-in is bound to the site's domain and does not work.
 
 ### Relay
 

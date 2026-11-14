@@ -1,7 +1,8 @@
 import {DcAuthKey, DcServerSalt, TrueDcId} from '@types';
 import type {StoredTempAuthKey} from '@lib/mtproto/tempAuthKeys';
 
-export type ActiveAccountNumber = 1 | 2 | 3 | 4;
+// * Luckgram (luckgram-specs#140, W4): 20 slots, upstream has 4 — the same numbers as ACCOUNT_NUMBERS (constants.ts)
+export type ActiveAccountNumber = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20;
 
 /**
  * Who the account is, the way Web A keeps it in the same slot (`account${n}`) for its menu of accounts -
