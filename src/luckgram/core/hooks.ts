@@ -3,7 +3,7 @@
  * follows its key, whoever changes it: this tab, another tab, the remote config.
  */
 
-import {Accessor, createSignal, onCleanup} from 'solid-js';
+import {Accessor, createEffect, createRoot, createSignal, on, onCleanup} from 'solid-js';
 import LuckgramSettings from '@/luckgram/core/settings';
 import {isFeatureEnabled, isFeatureLocallyEnabled} from '@/luckgram/core/features';
 import {remoteConfig} from '@/luckgram/core/remoteConfig';
@@ -35,4 +35,23 @@ export function useFeatureEnabled(key: string): Accessor<boolean> {
     local();
     return isFeatureEnabled(key);
   };
+}
+
+/**
+ * For what is not a component (a button built by hand): `onChange` runs when any of the features
+ * goes on or off — the user's switch, the server's say, the preview list.
+ * @returns a function that stops the watching
+ */
+export function watchFeatures(keys: string[], onChange: () => void): () => void {
+  return createRoot((dispose) => {
+    const states = keys.map((key) => useFeatureEnabled(key));
+    createEffect(on(() => states.map((state) => state()).join(','), () => {
+      try {
+        onChange();
+      } catch(err) {
+        console.warn('[luckgram] feature watcher', (err as Error)?.message);
+      }
+    }, {defer: true}));
+    return dispose;
+  });
 }

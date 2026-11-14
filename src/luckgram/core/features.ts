@@ -65,6 +65,16 @@ export const FEATURES: LuckgramFeature[] = [
     title: ['发送前翻译', 'Translate before sending'],
     description: ['输入框旁显示翻译按钮，把要发的话翻成对方的语言', 'A translate button by the message field turns what you wrote into the other side\'s language']
   },
+  {
+    key: 'free_transcribe', group: 'messages', default: true,
+    title: ['免费语音转文字', 'Free voice-to-text'],
+    description: ['没有 Telegram Premium 也能把语音消息和圆形视频转成文字', 'Turn voice messages and round videos into text without Telegram Premium']
+  },
+  {
+    key: 'dictation', group: 'messages', default: true,
+    title: ['语音输入', 'Dictation'],
+    description: ['输入框旁的按钮：说话，转成文字插入光标处', 'A button by the message field: speak, and the words are inserted at the cursor']
+  },
 
   // ---- 调试 / Debug
   {

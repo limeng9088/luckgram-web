@@ -12,6 +12,7 @@ import {
 } from '@components/chat/aiSendStyles';
 import getAiEditorRequest from '@components/richMessageInput/aiRequest';
 import LuckgramTranslateOut from '@/luckgram/translate/outgoing';
+import LuckgramDictation from '@/luckgram/voice/dictation';
 import type {ComposeMessageWithAiResult} from '@appManagers/aiTonesManager';
 import AiSendSparkles from '@components/chat/aiSendSparkles';
 import AiRewriteEffect from '@components/chat/aiRewriteEffect';
@@ -438,6 +439,8 @@ export default class ChatInput {
   public btnSendContainer: HTMLDivElement;
   // * Luckgram (W5): the draft translated before it is sent
   public luckgramTranslateOut: LuckgramTranslateOut;
+  // * Luckgram (W6): speech put into the field as text
+  public luckgramDictation: LuckgramDictation;
   /** layer 229: a bot is streaming text into this chat/topic and lets us stop it */
   private streamStoppable = false;
   private sendBtnIcon: ChatSendBtnIcon;
@@ -1902,6 +1905,7 @@ export default class ChatInput {
     // btnCancelRecord is built above but intentionally not appended to the DOM.
     this.newMessageWrapper.append(this.btnSendContainer);
     this.luckgramTranslateOut?.mount();
+    (this.luckgramDictation ??= new LuckgramDictation(this)).mount();
 
     // The voice + round-video recording panels are constructed and mounted by
     // ChatRecording (built in constructRecorder below): the voice panel is
@@ -5134,6 +5138,7 @@ export default class ChatInput {
 
   public updateSendBtn() {
     this.luckgramTranslateOut?.update();
+    this.luckgramDictation?.update();
     let icon: ChatSendBtnIcon;
 
     const isInputEmpty = this.isInputEmpty();
