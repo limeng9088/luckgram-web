@@ -20,7 +20,7 @@ import commonStateStorage from '@lib/commonStateStorage';
 import Icon from '@components/icon';
 import currencyStarIcon from '@components/currencyStarIcon';
 import {luckgramBrandString} from '@/luckgram/brandStrings';
-import {setLuckgramLangCode} from '@/luckgram/text';
+import {luckgramHtmlLang, luckgramPluralLocale, setLuckgramLangCode} from '@/luckgram/text';
 
 export const langPack: {[actionType: string]: LangPackKey} = {
   'messageActionChatCreate': 'ActionCreateGroup',
@@ -153,7 +153,8 @@ namespace I18n {
     const root = document.documentElement;
     root.dir = rtl ? 'rtl' : 'ltr';
     root.classList.toggle('is-rtl', rtl);
-    if(langCode) root.lang = langCode;
+    // * Luckgram: a pack's code is not always a language tag ("zh-hans-raw"); the document gets one that is
+    if(langCode) root.lang = luckgramHtmlLang(langCode);
   }
 
   function setLangCode(langCode: string) {
@@ -328,14 +329,14 @@ namespace I18n {
     }
 
     try {
-      pluralRules = new Intl.PluralRules(lastRequestedNormalizedLangCode);
+      pluralRules = new Intl.PluralRules(luckgramPluralLocale(lastRequestedNormalizedLangCode));
     } catch(err) {
       console.error('pluralRules error', err);
       pluralRules = new Intl.PluralRules(lastRequestedNormalizedLangCode.split('-', 1)[0]);
     }
 
     try {
-      pluralRules = new Intl.PluralRules(langPack.lang_code);
+      pluralRules = new Intl.PluralRules(luckgramPluralLocale(langPack.lang_code));
     } catch(err) {
       console.error('pluralRules error', err);
       pluralRules = new Intl.PluralRules(langPack.lang_code.split('-', 1)[0]);

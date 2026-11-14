@@ -359,3 +359,99 @@ describe('luckgram: the HTML that is sent', () => {
     });
   });
 });
+
+// ---- luckgram-specs#173: the language of the sign-in page
+import {getSignInLanguageOffer} from '@/luckgram/language';
+import {isLuckgramChinese, luckgramHtmlLang, luckgramPluralLocale, lgText, setLuckgramLangCode, LUCKGRAM_LANG_FOLLOWED_KEY} from '@/luckgram/text';
+
+describe('luckgram: the language on the sign-in page', () => {
+  const browser = (language: string) => vi.spyOn(navigator, 'languages', 'get').mockReturnValue([language]);
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.removeItem(LUCKGRAM_LANG_FOLLOWED_KEY);
+    setLuckgramLangCode(undefined);
+  });
+
+  test('the offer is always the way back: English from Chinese, Chinese from English', () => {
+    // * a page in Chinese, however it got there and whatever Telegram suggests
+    for(const current of ['zh-hans-raw', 'zh-hans', 'zh-hant-raw']) {
+      for(const suggested of ['zh-hans', 'en', 'ru', undefined]) {
+        expect(getSignInLanguageOffer(current, suggested, true)).toBe('en');
+      }
+    }
+
+    // * a page in English: Telegram's suggestion, as Luckgram's own pack when it is Chinese
+    expect(getSignInLanguageOffer('en', 'zh-hans', false)).toBe('zh-hans-raw');
+    expect(getSignInLanguageOffer('en', 'ru', false)).toBe('ru');
+    // * …or Chinese for a Chinese browser that went to English, where Telegram suggests English
+    expect(getSignInLanguageOffer('en', 'en', true)).toBe('zh-hans-raw');
+    expect(getSignInLanguageOffer(undefined, undefined, true)).toBe('zh-hans-raw');
+    // * an English browser where Telegram suggests English: nothing to offer
+    expect(getSignInLanguageOffer('en', 'en', false)).toBeUndefined();
+    expect(getSignInLanguageOffer('en', undefined, false)).toBeUndefined();
+  });
+
+  test('never the language the page is already in', () => {
+    for(const current of ['en', 'zh-hans-raw', 'zh-hans', 'ru', 'de']) {
+      for(const suggested of ['en', 'zh-hans', 'ru', 'de', undefined]) {
+        for(const browserChinese of [true, false]) {
+          const offer = getSignInLanguageOffer(current, suggested, browserChinese);
+          expect(offer === current).toBe(false);
+          // * and Chinese is not offered to a page in Chinese under another code
+          if(/^zh/.test(current)) expect(/^zh/.test(offer)).toBe(false);
+        }
+      }
+    }
+
+    expect(getSignInLanguageOffer('ru', 'ru', false)).toBe('en');
+    expect(getSignInLanguageOffer('ru', 'de', false)).toBe('de');
+  });
+
+  test('Luckgram\'s own texts: the browser\'s language until one is settled, then the interface\'s', () => {
+    browser('zh-CN');
+    // * the bundled English pack, before the browser's language was followed
+    setLuckgramLangCode('en');
+    expect(isLuckgramChinese()).toBe(true);
+
+    // * followed: Chinese
+    localStorage.setItem(LUCKGRAM_LANG_FOLLOWED_KEY, '1');
+    setLuckgramLangCode('zh-hans-raw');
+    expect(lgText('中', 'en')).toBe('中');
+
+    // * "Continue in English" on that Chinese browser: English, the notice included
+    setLuckgramLangCode('en');
+    expect(isLuckgramChinese()).toBe(false);
+    expect(lgText('中', 'en')).toBe('en');
+
+    // * an English browser that picked Chinese
+    browser('en-US');
+    setLuckgramLangCode('zh-hans');
+    expect(isLuckgramChinese()).toBe(true);
+  });
+
+  test('the document\'s lang is a language tag, in its canonical case', () => {
+    expect(luckgramHtmlLang('zh-hans-raw')).toBe('zh-Hans');
+    expect(luckgramHtmlLang('zh-hant-raw')).toBe('zh-Hant');
+    expect(luckgramHtmlLang('zh-hans')).toBe('zh-Hans');
+    expect(luckgramHtmlLang('en')).toBe('en');
+    expect(luckgramHtmlLang('pt-br')).toBe('pt-BR');
+    expect(luckgramHtmlLang('ru')).toBe('ru');
+    // * a code that is no tag at all: its language if that is one, English otherwise
+    expect(luckgramHtmlLang('de-x_y!')).toBe('de');
+    expect(luckgramHtmlLang('!!')).toBe('en');
+    expect(luckgramHtmlLang(undefined)).toBe('en');
+    for(const code of ['zh-hans-raw', 'pt-br', 'en', 'sr-latn', 'de-x_y!', '!!']) {
+      expect(() => new Intl.Locale(luckgramHtmlLang(code))).not.toThrow();
+    }
+  });
+
+  test('plurals are counted by a locale the browser knows', () => {
+    expect(luckgramPluralLocale('zh-hans-raw')).toBe('zh-hans');
+    expect(luckgramPluralLocale('zh-hant-raw')).toBe('zh-hant');
+    expect(luckgramPluralLocale('pt-br')).toBe('pt-br');
+    expect(luckgramPluralLocale(undefined)).toBe('en');
+    expect(() => new Intl.PluralRules('zh-hans-raw')).toThrow();
+    expect(() => new Intl.PluralRules(luckgramPluralLocale('zh-hans-raw'))).not.toThrow();
+  });
+});

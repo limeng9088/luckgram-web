@@ -7,9 +7,7 @@
  */
 
 import {LUCKGRAM_ZH_LANG_CODE} from '@/luckgram/config';
-import {isLuckgramBrowserChinese} from '@/luckgram/text';
-
-const FOLLOWED_KEY = 'lg_lang_followed';
+import {LUCKGRAM_LANG_FOLLOWED_KEY as FOLLOWED_KEY, isLuckgramBrowserChinese} from '@/luckgram/text';
 
 type LangPackLike = {lang_code: string};
 type I18nLike = {
@@ -58,4 +56,29 @@ export function followBrowserLanguage(langPack: LangPackLike, I18n: I18nLike): P
     // * asked again by the next start: no connection yet, or the pack could not be loaded
     console.warn('[luckgram] the Chinese language pack was not applied', err);
   });
+}
+
+/**
+ * The language the sign-in page offers to continue in (languageChangeButton.tsx), or none.
+ * Upstream offers the one Telegram suggests for the visitor's country, once, and has no way back:
+ * a page that went Chinese — by the browser's language, or by that offer — stayed Chinese, and kept
+ * offering Chinese when Telegram's code for it differs from the pack's (luckgram-specs#173).
+ * Here the offer is always the other way: English from Chinese, Chinese (or what Telegram
+ * suggests) from English, and it comes back after every switch.
+ *
+ * @param current the language pack in use
+ * @param suggested Telegram's `suggested_lang_code`
+ */
+export function getSignInLanguageOffer(current: string, suggested: string, browserChinese = isLuckgramBrowserChinese()): string | undefined {
+  const isChinese = (langCode: string) => /^zh\b/i.test(langCode || '');
+  current ||= 'en';
+
+  if(isChinese(current)) return 'en';
+  if(current === 'en') {
+    if(suggested && suggested !== 'en') return isChinese(suggested) ? LUCKGRAM_ZH_LANG_CODE : suggested;
+    return browserChinese ? LUCKGRAM_ZH_LANG_CODE : undefined;
+  }
+
+  // * some other language: what Telegram suggests if it is not this one, else English
+  return suggested && suggested !== current ? suggested : 'en';
 }

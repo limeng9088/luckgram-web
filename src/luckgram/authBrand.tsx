@@ -7,6 +7,8 @@
  * (luckgram.scss), and under the name a line that says what Luckgram is, with a link to its site.
  */
 
+import {createSignal, onCleanup} from 'solid-js';
+import rootScope from '@lib/rootScope';
 import {lgText} from '@/luckgram/text';
 
 export const LUCKGRAM_SITE = 'https://luckgram.cc';
@@ -30,10 +32,18 @@ export function LuckgramAuthBrand() {
 
 /** What Luckgram is, under its name: in view without scrolling, whatever the card's height. */
 export function LuckgramAuthNotice() {
+  // * in the interface's language, also after it is switched on this page (luckgram-specs#173)
+  const [language, setLanguage] = createSignal(0);
+  const onLanguageApply = () => {
+    setLanguage((count) => count + 1);
+  };
+  rootScope.addEventListener('language_apply', onLanguageApply);
+  onCleanup(() => rootScope.removeEventListener('language_apply', onLanguageApply));
+
   return (
     <p class="luckgram-auth-notice">
-      {luckgramThirdPartyNotice()}{' '}
-      <a href={LUCKGRAM_SITE} target="_blank" rel="noopener">{lgText('了解 Luckgram', 'About Luckgram')}</a>
+      {(language(), luckgramThirdPartyNotice())}{' '}
+      <a href={LUCKGRAM_SITE} target="_blank" rel="noopener">{(language(), lgText('了解 Luckgram', 'About Luckgram'))}</a>
     </p>
   );
 }
