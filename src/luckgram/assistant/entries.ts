@@ -1,7 +1,11 @@
 /*
  * Luckgram Web (luckgram-specs#188, W8 需求 1、6): the ways into the assistant from the chat
  * list — the "AI" button right of the search field, and the "Luckgram AI" row over the list
- * (in "All chats" only; LuckgramSettings `ai_assistant_pin` hides it). Also what happens once as
+ * (in "All chats" only; LuckgramSettings `ai_assistant_pin` hides it). The row is one of the panels
+ * of upstream's `.chatlist-overlay` — the layer over the list that holds the suggestion bar and the
+ * folder tabs, whose height the list leaves free: anything put into the list's own container lies
+ * under that layer. With the column narrowed to icons, where the header keeps only its menu button,
+ * the row is the way in: its picture alone, in whatever folder, pinned or not. Also what happens once as
  * the app starts: a page reloaded at #/luckgram-ai opens the assistant again, and conversations
  * of accounts that are no longer signed in are deleted.
  *
@@ -67,9 +71,11 @@ export function mountAssistantEntries(options: {
       open();
     }
   });
-  options.chatList.prepend(row);
 
   const update = () => {
+    // * the layer is built by the chat list, which may come after this
+    if(!row.isConnected) options.chatList.querySelector('.chatlist-overlay')?.append(row);
+
     const enabled = isFeatureEnabled(AI_ASSISTANT);
     button.classList.toggle('hide', !enabled);
     let filterId: number;
@@ -77,7 +83,9 @@ export function mountAssistantEntries(options: {
       filterId = options.getFilterId();
     } catch(err) {}
 
-    row.classList.toggle('hide', !isPinVisible({enabled, pinned: LuckgramSettings.getBool(KEY_PIN, true), filterId}));
+    row.classList.toggle('hide', !enabled);
+    // * not shown in the wide column; the column of icons shows it all the same (luckgram.scss)
+    row.classList.toggle('is-unpinned', !isPinVisible({enabled, pinned: LuckgramSettings.getBool(KEY_PIN, true), filterId}));
   };
 
   watchFeatures([AI_ASSISTANT], update);

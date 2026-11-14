@@ -1089,22 +1089,48 @@ body.has-auth-pages {
 .luckgram-ai-entry {
   flex: 0 0 auto;
   margin-inline-start: .5rem;
+
+  // * the column of icons has no room for it (it would be cut off): the row's picture is the way in there
+  #column-left.is-collapsed:not(.has-open-tabs) & {
+    display: none;
+  }
 }
 
 .luckgram-ai-row {
-  flex: 0 0 auto;
+  // * a panel of upstream's `.chatlist-overlay`, under the folder tabs: over that layer's backdrop
+  // * (z-index -1) as the tabs are, and counted in the height the list leaves free
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: .75rem;
-  min-height: 4.5rem;
-  margin: 0 .5rem;
+  min-height: 3.5rem;
+  margin: 0 .5rem .25rem;
   padding: 0 .5rem;
   border-radius: .75rem;
   cursor: pointer;
   user-select: none;
 
-  &.hide {
+  &.is-unpinned {
     display: none;
+  }
+
+  // * the column narrowed to icons (80px): the header keeps its menu button alone, and this row,
+  // * as a picture, is the way in — in any folder, and with "在聊天列表顶部显示" off too
+  #column-left.is-collapsed:not(.has-open-tabs) & {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 .25rem;
+    padding: 0;
+    border-radius: 0;
+
+    .luckgram-ai-row-texts {
+      display: none;
+    }
+  }
+
+  &.hide {
+    display: none !important;
   }
 
   &:hover,
@@ -1113,9 +1139,9 @@ body.has-auth-pages {
   }
 
   .luckgram-ai-avatar {
-    width: 3.375rem;
-    height: 3.375rem;
-    font-size: 1.125rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1rem;
   }
 
   &-texts {
