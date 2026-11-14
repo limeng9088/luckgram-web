@@ -42,6 +42,17 @@
     transform: translateX(50%);
   }
 
+  // * the sign-in card runs down to the bottom of the window and has links there (specs#180):
+  // * above it instead, where only the page's background is — and under the "can't connect" bar when both show
+  body.has-auth-pages & {
+    inset-block-start: calc(12px + env(safe-area-inset-top, 0px));
+    inset-block-end: auto;
+  }
+
+  body.has-auth-pages:has(.luckgram-offline-bar) & {
+    inset-block-start: calc(60px + env(safe-area-inset-top, 0px));
+  }
+
   &:disabled {
     opacity: .6;
   }
