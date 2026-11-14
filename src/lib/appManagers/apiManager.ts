@@ -387,7 +387,9 @@ export class ApiManager extends ApiManagerMethods {
         }
       }
       IDB.closeDatabases();
-      this.rootScope.dispatchEvent('logging_out', {accountNumber, migrateTo: migrateAccountTo});
+      // * Luckgram: counted here, while the storage still answers — the tabs turn theirs off as they hear of it
+      const accountsLeft = await AccountController.getTotalAccounts().catch(() => Math.max(totalAccounts - 1, 0));
+      this.rootScope.dispatchEvent('logging_out', {accountNumber, migrateTo: migrateAccountTo, accountsLeft});
     };
 
     setTimeout(clear, 1e3);
@@ -416,7 +418,7 @@ export class ApiManager extends ApiManagerMethods {
     ]);
 
     IDB.closeDatabases();
-    globalRootScope.dispatchEvent('logging_out', {});
+    globalRootScope.dispatchEvent('logging_out', {accountsLeft: 0});
   }
 
   private generateNetworkerGetKey(dcId: DcId, transportType: TransportType, connectionType: ConnectionType) {

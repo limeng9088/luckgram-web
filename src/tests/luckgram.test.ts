@@ -3,7 +3,7 @@
 
 import {luckgramBrandString, luckgramBrandText} from '@/luckgram/brandStrings';
 import {getLuckgramVersionText} from '@/luckgram/config';
-import {followBrowserLanguage} from '@/luckgram/language';
+import {followBrowserLanguage, rememberLanguageForSignIn} from '@/luckgram/language';
 import {isNewerDeployment} from '@/luckgram/update';
 import {resolveLuckgramCredentials, luckgramHtmlContext} from '../../scripts/luckgram/vite-plugin.mjs';
 import {buildContentSecurityPolicy, buildHeadersFile} from '../../scripts/luckgram/headers.mjs';
@@ -126,6 +126,53 @@ describe('luckgram: the browser language', () => {
     await followBrowserLanguage({lang_code: 'en'}, i18n);
     expect(i18n.getLangPackAndApply).toHaveBeenCalledTimes(2);
     warn.mockRestore();
+  });
+
+  test('after the last account logged out the sign-in page takes its language up again', async() => {
+    // * a Chinese browser that was in Chinese: the stored pack is gone, the bundled one is English
+    setLanguages(['zh-CN']);
+    localStorage.setItem('lg_lang_followed', '1');
+    rememberLanguageForSignIn('zh-hans-raw', localStorage);
+    let i18n = makeI18n();
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledWith('zh-hans-raw');
+    expect(localStorage.getItem('lg_lang_followed')).toBe('1');
+    expect(localStorage.getItem('lg_lang_restore')).toBeNull();
+
+    // * any language, whatever the browser's
+    localStorage.clear();
+    setLanguages(['en-US']);
+    localStorage.setItem('lg_lang_followed', '1');
+    rememberLanguageForSignIn('ru', localStorage);
+    i18n = makeI18n();
+    await followBrowserLanguage({lang_code: 'en'}, i18n);
+    expect(i18n.getLangPackAndApply).toHaveBeenCalledWith('ru');
+
+    // * English chosen on a Chinese browser stays English
+    localStorage.clear();
+    setLanguages(['zh-CN']);
+    localStorage.setItem('lg_lang_followed', '1');
+    rememberLanguageForSignIn('en', localStorage);
+    i18n = makeI18n();
+    expect(followBrowserLanguage({lang_code: 'en'}, i18n)).toBeUndefined();
+    expect(i18n.getLangPackAndApply).not.toHaveBeenCalled();
+  });
+
+  test('a language that could not be taken up again is asked for at the next start; a broken value is not', async() => {
+    setLanguages(['en-US']);
+    rememberLanguageForSignIn('ru', localStorage);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const failing = makeI18n({fail: true});
+    await followBrowserLanguage({lang_code: 'en'}, failing);
+    expect(localStorage.getItem('lg_lang_restore')).toBe('ru');
+    expect(localStorage.getItem('lg_lang_followed')).toBeNull();
+    warn.mockRestore();
+
+    localStorage.setItem('lg_lang_restore', '<script>');
+    const i18n = makeI18n();
+    expect(followBrowserLanguage({lang_code: 'en'}, i18n)).toBeUndefined();
+    expect(i18n.getLangPackAndApply).not.toHaveBeenCalled();
+    expect(localStorage.getItem('lg_lang_restore')).toBeNull();
   });
 
   test('any other browser stays in English, and a chosen language is kept', () => {
