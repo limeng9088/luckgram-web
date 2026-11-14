@@ -2,8 +2,15 @@ name: Release
 
 # Luckgram Web (luckgram-specs#137, W1). The production address — https://web.luckgram.cc and the
 # backup entrance https://lgweb.cat158.com, both on Cloudflare Pages project luckgram-web — is
-# deployed only from here, by hand, from a commit of master.
+# deployed from here and from nowhere else:
+#   a push to master (a merged pull request)   → that commit, after the tests, the type check, the
+#                                                 build and check-site have passed on it
+#   a manual run with a commit of master        → that commit: an earlier one to go back to, or the
+#                                                 same one again
+# There is no development site in between (luckgram-specs#167): what is merged is what users get.
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
     inputs:
       commit:
@@ -30,12 +37,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.commit }}
+          ref: ${{ inputs.commit || github.sha }}
           fetch-depth: 0
 
       - name: The commit is on master
         env:
-          COMMIT: ${{ inputs.commit }}
+          COMMIT: ${{ inputs.commit || github.sha }}
         run: |
           SHA=$(git rev-parse HEAD)
           if [ "$SHA" != "$COMMIT" ]; then
@@ -83,5 +90,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          EVENT_NAME: release
         run: bash scripts/luckgram/deploy.sh "$PAGES_PROJECT" tmp/luckgram-site

@@ -3,8 +3,8 @@
 #
 #   deploy.sh <project> <directory>
 #
-# A pull request (EVENT_NAME=pull_request, HEAD_REF=<branch>) goes to a preview of its branch;
-# everything else goes to the project's production branch, whose name is asked from Cloudflare.
+# It goes to the project's production branch, whose name is asked from Cloudflare. There are no
+# previews of pull requests (luckgram-specs#167).
 # Needs CLOUDFLARE_API_TOKEN (Pages: Edit) and CLOUDFLARE_ACCOUNT_ID. Writes `url` and `alias`
 # to $GITHUB_OUTPUT.
 set -euo pipefail
@@ -17,16 +17,12 @@ if [ -z "${CLOUDFLARE_API_TOKEN:-}" ] || [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; th
   exit 1
 fi
 
-if [ "${EVENT_NAME:-}" = "pull_request" ]; then
-  BRANCH=${HEAD_REF:?HEAD_REF is not set}
-else
-  BRANCH=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-    "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT" |
-    node -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const b=JSON.parse(s).result?.production_branch;if(!b)process.exit(1);console.log(b)})') || {
-    echo "::error::Could not read the production branch of Cloudflare Pages project $PROJECT."
-    exit 1
-  }
-fi
+BRANCH=$(curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$PROJECT" |
+  node -e 'let s="";process.stdin.on("data",(d)=>s+=d).on("end",()=>{const b=JSON.parse(s).result?.production_branch;if(!b)process.exit(1);console.log(b)})') || {
+  echo "::error::Could not read the production branch of Cloudflare Pages project $PROJECT."
+  exit 1
+}
 
 echo "Deploying $DIR to $PROJECT, branch $BRANCH"
 LOG=$(mktemp)

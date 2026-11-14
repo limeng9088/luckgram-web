@@ -6,7 +6,7 @@
  *    Actions secrets, the same pair as the phone apps) and fails without them: it never falls back
  *    to the pair upstream keeps in .env. Neither value is in the repository.
  * 2. Build information for the version line and the update check: VITE_LG_BUILD (CI run number),
- *    VITE_LG_COMMIT, VITE_LG_CHANNEL ('dev' for web-dev.luckgram.cc and previews, 'prod' for
+ *    VITE_LG_COMMIT, VITE_LG_CHANNEL ('dev' for a build against the development servers, 'prod' for
  *    web.luckgram.cc, 'local' otherwise).
  * 3. index.html: the Luckgram logo in place of Telegram's on the sign-in page, and noindex on
  *    everything that is not the production address.
@@ -23,7 +23,8 @@ const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..',
 
 export const LUCKGRAM_ORIGINS = {
   prod: 'https://web.luckgram.cc/',
-  dev: 'https://web-dev.luckgram.cc/',
+  // * no development site is deployed (luckgram-specs#167): a dev build is run where it is built
+  dev: 'http://localhost:8080/',
   local: 'http://localhost:8080/'
 };
 

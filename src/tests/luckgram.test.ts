@@ -49,7 +49,8 @@ describe('luckgram: the product name', () => {
 
   test('the page template', () => {
     expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'prod'})).toMatchObject({title: 'Luckgram', origin: 'https://web.luckgram.cc/'});
-    expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'dev'}).origin).toBe('https://web-dev.luckgram.cc/');
+    // * no development site is deployed (specs#167)
+    expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'dev'}).origin).toBe('http://localhost:8080/');
     expect(() => luckgramHtmlContext({LUCKGRAM_CHANNEL: 'staging'})).toThrow(/LUCKGRAM_CHANNEL/);
   });
 });
@@ -240,7 +241,7 @@ describe('luckgram: one address for the production site', () => {
       expect(getCanonicalRedirect('prod', at(hostname))).toBeUndefined();
     }
 
-    expect(getCanonicalRedirect('dev', at('feat-x.luckgram-web-dev.pages.dev'))).toBeUndefined();
+    expect(getCanonicalRedirect('dev', at('luckgram-web.pages.dev'))).toBeUndefined();
     expect(getCanonicalRedirect('local', at('luckgram-web.pages.dev'))).toBeUndefined();
   });
 
