@@ -15,7 +15,7 @@ import fs from 'fs';
 import path from 'path';
 import {fileURLToPath} from 'url';
 import {getLuckgramBuildInfo} from './vite-plugin.mjs';
-import {findFingerprints} from './fingerprint.mjs';
+import {findFingerprints, withoutHashedNames} from './fingerprint.mjs';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const siteDir = path.resolve(rootDir, process.argv[2] || 'tmp/luckgram-site');
@@ -44,11 +44,11 @@ else if(!withOwnHash) errors.push('no script carries the api_hash of this build'
 // 2. the name
 const html = read('index.html');
 if(!/<title>Luckgram<\/title>/.test(html)) errors.push('index.html: the title is not Luckgram');
-if(/Telegram Web|WebK/.test(html)) errors.push('index.html names Telegram Web');
+if(/Telegram Web|WebK/.test(withoutHashedNames(html))) errors.push('index.html names Telegram Web');
 for(const name of ['site.webmanifest', 'site_apple.webmanifest']) {
   const manifest = JSON.parse(read(name));
   if(manifest.name !== 'Luckgram' || manifest.short_name !== 'Luckgram') errors.push(`${name}: the name is not Luckgram`);
-  if(/Telegram Web|WebK|telegram\.org/.test(JSON.stringify(manifest))) errors.push(`${name} names Telegram Web`);
+  if(/Telegram Web|WebK|telegram\.org/.test(withoutHashedNames(JSON.stringify(manifest)))) errors.push(`${name} names Telegram Web`);
 }
 
 // * files are named by their hash alone (vite.config.ts): the service worker is known by what it does

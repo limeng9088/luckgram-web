@@ -396,6 +396,21 @@ describe('luckgram: the HTML that is sent', () => {
       expect(findFingerprints({...site, texts: {'site.webmanifest': '{"name":"Luckgram","short_name":"Telegram"}'}}).join('\n')).toMatch(/outside the description/);
     });
 
+    test('a hash that happens to spell an upstream name is not one (fBxztWeBW.js failed a build)', () => {
+      const site = clean();
+      for(const name of ['fBxztWeBW.js', 'fAtWEBk1x.css', 'fwebKabcd.js', 'f-TweB_12.woff2']) {
+        expect(findFingerprints({...site, files: [...site.files, name]}), name).toEqual([]);
+        expect(findFingerprints({...site, html: site.html.replace('</head>', `<script type="module" src="./${name}"></script></head>`)}), name).toEqual([]);
+      }
+
+      // * the manifests name hashed icons
+      expect(findFingerprints({...site, texts: {'site.webmanifest': '{"name":"Luckgram","icons":[{"src":"fBxztWeBW.png"}]}'}})).toEqual([]);
+
+      // * anything that is not just a hash is still looked at
+      expect(findFingerprints({...site, files: [...site.files, 'tweb-BxztWeBW.js']}).join('\n')).toMatch(/named after upstream/);
+      expect(findFingerprints({...site, files: [...site.files, 'ftweb.js']}).join('\n')).toMatch(/named after upstream/);
+    });
+
     test('files named for what they are instead of by their hash; source maps in production', () => {
       const site = clean();
       expect(findFingerprints({...site, files: [...site.files, 'telegramMeWebManager-DcZfJQi7.js']}).join('\n')).toMatch(/named after upstream/);
