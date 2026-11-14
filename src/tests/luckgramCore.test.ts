@@ -207,6 +207,18 @@ describe('luckgram settings', () => {
       expect(store.getPrivate('device_token')).toBe('secret');
     });
 
+    test('the connection setting goes back to automatic; what connected last stays', async() => {
+      const keyValue = makeKeyValue();
+      keyValue.setItem('lg_route_mode', 'relay');
+      keyValue.setItem('lg_route_preferred', 'official');
+      await onLuckgramLoggingOut(1, {clear: async() => {}}, keyValue, 'en');
+      expect(keyValue.map.get('lg_route_mode')).toBe('relay');
+
+      await onLuckgramLoggingOut(0, {clear: async() => {}}, keyValue, 'en');
+      expect(keyValue.map.has('lg_route_mode')).toBe(false);
+      expect(keyValue.map.get('lg_route_preferred')).toBe('official');
+    });
+
     test('a storage that fails does not hold the log out up', async() => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       await expect(onLuckgramLoggingOut(0, {clear: () => Promise.reject(new Error('no'))}, makeKeyValue(), 'en')).resolves.toBeUndefined();
