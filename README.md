@@ -56,6 +56,12 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   for Telegram accounts on one more host is one more host for Google Safe Browsing to list as deceptive, as it
   did with `web-dev.luckgram.cc`. What is merged is what users get, so a change is tried on a local build
   (`pnpm start`, or the commands above and any static server) before it is merged, and on production after.
+- What is deployed does not read as Telegram Web (luckgram-specs#167; `scripts/luckgram/fingerprint.mjs`,
+  applied by `assemble.mjs`, checked by `check-site.mjs`). Upstream's static skeleton is not in `index.html`: a
+  script (`f<hash>.js`, the first one the page loads) puts it into the document unchanged, so the app runs as
+  upstream wrote it. Bundle files are named `f<hash>.<ext>` and nothing else (`vite.config.ts`), comments are
+  stripped, the tile colour is Luckgram's, and a production build carries no source maps. To find a file of a
+  local development build (`LUCKGRAM_CHANNEL=dev`) by its source name, read its `.map`.
 - The deployed page only talks to Telegram's servers and Luckgram's own domains; the
   Content-Security-Policy in `scripts/luckgram/headers.mjs` enforces it.
 
