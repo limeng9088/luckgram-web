@@ -17,6 +17,13 @@ import watchTransformCache from './scripts/watch-transform-cache.mjs';
 import hotReloadPlugin from './scripts/hot-reload-plugin.mjs';
 import widgetSandboxPlugin, {widgetSandboxQuickjsPlugin} from './scripts/widget-sandbox-plugin.mjs';
 import luckgramPlugin, {luckgramHtmlContext} from './scripts/luckgram/vite-plugin.mjs';
+
+// * "f" in front: a hash may begin with "-", and a file named "-abc.js" is taken for an option by every command
+const LUCKGRAM_OUTPUT_NAMES = {
+  entryFileNames: 'f[hash].js',
+  chunkFileNames: 'f[hash].js',
+  assetFileNames: 'f[hash][extname]'
+};
 import path from 'path';
 import {createRequire} from 'module';
 import {fileURLToPath} from 'url';
@@ -361,14 +368,18 @@ export default defineConfig({
     // properties natively, so lightningcss leaves them alone; RTL runs off `documentElement.dir`,
     // which index.ts sets on every language, not off `:lang()`.
     cssTarget: ['chrome87', 'edge87', 'firefox78', 'safari14.1'],
-    sourcemap: true,
+    // Luckgram: the production site carries no source maps — upstream's whole source, by its own paths (specs#167)
+    sourcemap: process.env.LUCKGRAM_CHANNEL !== 'prod',
     assetsDir: '',
     copyPublicDir: false,
     emptyOutDir: true,
     minify: NO_MINIFY ? false : undefined,
     rolldownOptions: {
       output: {
-        sourcemapIgnoreList: serverOptions.sourcemapIgnoreList
+        sourcemapIgnoreList: serverOptions.sourcemapIgnoreList,
+        // Luckgram: files are named by their hash alone. Upstream's names (telegramMeWebManager-….js,
+        // appImManager-….js, …) are a list anyone can match against Telegram Web's (specs#167)
+        ...LUCKGRAM_OUTPUT_NAMES
       }
       // input: {
       //   main: './index.html',
@@ -380,7 +391,8 @@ export default defineConfig({
   worker: {
     format: 'es',
     // a build makes the workers with these alone: the engine worker's QuickJS is this checkout's, as the page's is
-    plugins: () => [widgetSandboxQuickjsPlugin(rootDir)]
+    plugins: () => [widgetSandboxQuickjsPlugin(rootDir)],
+    rolldownOptions: {output: LUCKGRAM_OUTPUT_NAMES}
   },
   css: {
     devSourcemap: true,
