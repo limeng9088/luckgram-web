@@ -6,25 +6,24 @@ import loadFonts from '@helpers/dom/loadFonts';
 import {Config, LangPackString} from '@layer';
 import I18n, {LangPackKey} from '@lib/langPack';
 import rootScope from '@lib/rootScope';
+import {getSignInLanguageOffer} from '@/luckgram/language';
 
 const KEY: LangPackKey = 'Login.ContinueOnLanguage';
 
-type LangPayload = {config: Config.config, strings: LangPackString[]};
+type LangPayload = {langCode: string, strings: LangPackString[]};
 
-let cachedPromise: Promise<LangPayload | undefined>;
-let appliedAlready = false;
+// * Luckgram (luckgram-specs#173): which language is offered is Luckgram's choice — always the way back
+// * from the one in use — and it is made again after every switch (src/luckgram/language.ts). Upstream
+// * offers Telegram's suggestion once and never again.
+let configPromise: Promise<Config.config>;
+let cacheApplied: Promise<unknown>;
 
-function getLang() {
-  return cachedPromise ||= rootScope.managers.apiManager.getConfig().then(async(config) => {
-    if(config.suggested_lang_code === I18n.getLastRequestedLangCode()) {
-      return undefined;
-    }
-    const [strings] = await Promise.all([
-      I18n.getStrings(config.suggested_lang_code, [KEY]),
-      I18n.getCacheLangPackAndApply()
-    ]);
-    return {config, strings};
-  });
+async function getLang(): Promise<LangPayload | undefined> {
+  const config = await (configPromise ||= rootScope.managers.apiManager.getConfig());
+  await (cacheApplied ||= I18n.getCacheLangPackAndApply().catch((): undefined => undefined));
+  const langCode = getSignInLanguageOffer(I18n.getLastRequestedLangCode(), config.suggested_lang_code);
+  if(!langCode) return undefined;
+  return {langCode, strings: await I18n.getStrings(langCode, [KEY])};
 }
 
 // Format the key with the suggested-language strings without leaving the
@@ -49,31 +48,44 @@ export default function LanguageChangeButton(): JSX.Element {
   const [content, setContent] = createSignal<string>('');
   let suggestedLangCode: string;
 
-  const onLanguageApply = () => setVisible(false);
-  rootScope.addEventListener('language_apply', onLanguageApply, {once: true});
-  onCleanup(() => rootScope.removeEventListener('language_apply', onLanguageApply));
+  let disposed = false, offerId = 0;
 
-  onMount(async() => {
-    if(appliedAlready) return;
+  // * the offer for the language in use now; made on mount and again whenever a language is applied
+  const offer = async() => {
+    const id = ++offerId;
+    const payload = await getLang().catch((): undefined => undefined);
+    if(disposed || id !== offerId) return;
+    if(!payload || !payload.strings.length) {
+      setVisible(false);
+      return;
+    }
 
-    const payload = await getLang();
-    if(!payload) return;
-
-    suggestedLangCode = payload.config.suggested_lang_code;
+    suggestedLangCode = payload.langCode;
     const text = formatSuggestedText(payload.strings);
     await loadFonts({text: [text]});
+    if(disposed || id !== offerId) return;
 
     setContent(text);
+    setSubmitting(false);
     setVisible(true);
+  };
+
+  const onLanguageApply = () => {
+    offer();
+  };
+  rootScope.addEventListener('language_apply', onLanguageApply);
+  onCleanup(() => {
+    disposed = true;
+    rootScope.removeEventListener('language_apply', onLanguageApply);
   });
 
+  onMount(offer);
+
   const onClick = () => {
-    appliedAlready = true;
     setSubmitting(true);
     // * a language pack that did not come leaves the button to be pressed again
     I18n.getLangPackAndApply(suggestedLangCode).catch((err) => {
       console.error('suggested language error', err);
-      appliedAlready = false;
       setSubmitting(false);
     });
   };
