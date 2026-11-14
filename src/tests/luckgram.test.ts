@@ -362,7 +362,7 @@ describe('luckgram: the HTML that is sent', () => {
 
 // ---- luckgram-specs#173: the language of the sign-in page
 import {getSignInLanguageOffer} from '@/luckgram/language';
-import {isLuckgramChinese, luckgramPluralLocale, lgText, setLuckgramLangCode, LUCKGRAM_LANG_FOLLOWED_KEY} from '@/luckgram/text';
+import {isLuckgramChinese, luckgramHtmlLang, luckgramPluralLocale, lgText, setLuckgramLangCode, LUCKGRAM_LANG_FOLLOWED_KEY} from '@/luckgram/text';
 
 describe('luckgram: the language on the sign-in page', () => {
   const browser = (language: string) => vi.spyOn(navigator, 'languages', 'get').mockReturnValue([language]);
@@ -428,6 +428,22 @@ describe('luckgram: the language on the sign-in page', () => {
     browser('en-US');
     setLuckgramLangCode('zh-hans');
     expect(isLuckgramChinese()).toBe(true);
+  });
+
+  test('the document\'s lang is a language tag, in its canonical case', () => {
+    expect(luckgramHtmlLang('zh-hans-raw')).toBe('zh-Hans');
+    expect(luckgramHtmlLang('zh-hant-raw')).toBe('zh-Hant');
+    expect(luckgramHtmlLang('zh-hans')).toBe('zh-Hans');
+    expect(luckgramHtmlLang('en')).toBe('en');
+    expect(luckgramHtmlLang('pt-br')).toBe('pt-BR');
+    expect(luckgramHtmlLang('ru')).toBe('ru');
+    // * a code that is no tag at all: its language if that is one, English otherwise
+    expect(luckgramHtmlLang('de-x_y!')).toBe('de');
+    expect(luckgramHtmlLang('!!')).toBe('en');
+    expect(luckgramHtmlLang(undefined)).toBe('en');
+    for(const code of ['zh-hans-raw', 'pt-br', 'en', 'sr-latn', 'de-x_y!', '!!']) {
+      expect(() => new Intl.Locale(luckgramHtmlLang(code))).not.toThrow();
+    }
   });
 
   test('plurals are counted by a locale the browser knows', () => {
