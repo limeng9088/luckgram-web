@@ -9,7 +9,7 @@
  */
 
 import appImManager from '@lib/appImManager';
-import {APP_TABS} from '@lib/appColumns';
+import {APP_TABS, LEFT_COLUMN_ACTIVE_CLASSNAME} from '@lib/appColumns';
 import rootScope from '@lib/rootScope';
 import appNavigationController, {NavigationItem} from '@components/appNavigationController';
 import confirmationPopup from '@components/confirmationPopup';
@@ -29,6 +29,10 @@ export const assistantStore = new AssistantStore(luckgramStorage);
 let page: AssistantPage;
 let navigationItem: NavigationItem;
 let listening = false;
+/** a narrow window showed the chat list as the page was opened: Back goes there, whatever chat is under the page */
+let cameFromList = false;
+/** what was typed and not sent as the page was closed (opening a chat closes it): there again when it is opened */
+let draft: {account: PeerId, text: string};
 
 export const isAssistantOpen = () => !!page;
 
@@ -74,6 +78,10 @@ export async function openAssistant(): Promise<AssistantPageApi | undefined> {
     }).then(() => true, () => false)
   });
 
+  if(draft?.account === rootScope.myId && draft.text) page.api.setInput(draft.text);
+  draft = undefined;
+
+  cameFromList = mediaSizes.isMobile && document.body.classList.contains(LEFT_COLUMN_ACTIVE_CLASSNAME);
   appImManager.columnEl.append(page.element);
   document.body.classList.add('luckgram-ai-open');
 
@@ -100,6 +108,7 @@ export function closeAssistant(options: {keepColumn?: boolean} = {}) {
   if(!page) return;
   const closing = page;
   page = undefined;
+  draft = {account: rootScope.myId, text: closing.api.getInput()};
   closing.destroy();
   document.body.classList.remove('luckgram-ai-open');
 
@@ -112,13 +121,15 @@ export function closeAssistant(options: {keepColumn?: boolean} = {}) {
   if(options.keepColumn) return;
 
   const openPeerId = appImManager.chat?.peerId;
-  // * back to the list on a narrow window with no chat under the page; the chat's own address otherwise
-  if(mediaSizes.isMobile && !openPeerId) appImManager.selectTab(APP_TABS.CHATLIST);
+  // * a narrow window goes back where it came from: to the list, when the page was opened from it (a chat
+  // * opened before is still under the page) or there is no chat; the chat's own address otherwise
+  if(mediaSizes.isMobile && (cameFromList || !openPeerId)) appImManager.selectTab(APP_TABS.CHATLIST);
   if(location.hash === AI_HASH) appNavigationController.overrideHash('', true);
 }
 
 /** The account logged out in this tab: its conversations go with it (需求 6). */
 export function deleteAssistantAccount(account: number | string) {
   closeAssistant({keepColumn: true});
+  draft = undefined;
   return assistantStore.deleteAccount(account);
 }

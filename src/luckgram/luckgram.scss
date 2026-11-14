@@ -699,8 +699,24 @@ body.has-auth-pages {
 // * a page of its own over the middle column, in the colours and shapes of upstream's chat
 .luckgram-ai-page {
   position: absolute;
-  inset: 0;
+  // * the middle column is as wide as the whole middle area and moved sideways to centre the chat between
+  // * the side columns (upstream's _chat.scss, `#column-center`): what fills it reaches under the left
+  // * column and past the window's edge. The page takes the insets upstream's own message area takes
+  // * (`.bubbles`): symmetric, undoing that move — from the left column's edge to the window's (or the
+  // * docked right column's). Without the left column docked (a narrow window) it covers the column's
+  // * padding too, as the message area does
+  inset: calc(var(--page-chats-padding, 0px) * -1);
   z-index: 3;
+
+  // * $floating-left-sidebar + 1 (upstream's variables.scss): the left column is docked from here up
+  @media only screen and (min-width: 926px) {
+    inset-inline: calc((var(--folders-sidebar-offset, 0px) + var(--left-column-width, 0px) - var(--page-chats-padding, 0px)) / 2);
+
+    body.is-right-column-shown:not(.right-column-floats) & {
+      inset-inline: calc((var(--folders-sidebar-offset, 0px) + var(--left-column-width, 0px) + var(--right-column-width, 0px)) / 2);
+    }
+  }
+
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -1073,22 +1089,48 @@ body.has-auth-pages {
 .luckgram-ai-entry {
   flex: 0 0 auto;
   margin-inline-start: .5rem;
+
+  // * the column of icons has no room for it (it would be cut off): the row's picture is the way in there
+  #column-left.is-collapsed:not(.has-open-tabs) & {
+    display: none;
+  }
 }
 
 .luckgram-ai-row {
-  flex: 0 0 auto;
+  // * a panel of upstream's `.chatlist-overlay`, under the folder tabs: over that layer's backdrop
+  // * (z-index -1) as the tabs are, and counted in the height the list leaves free
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: .75rem;
-  min-height: 4.5rem;
-  margin: 0 .5rem;
+  min-height: 3.5rem;
+  margin: 0 .5rem .25rem;
   padding: 0 .5rem;
   border-radius: .75rem;
   cursor: pointer;
   user-select: none;
 
-  &.hide {
+  &.is-unpinned {
     display: none;
+  }
+
+  // * the column narrowed to icons (80px): the header keeps its menu button alone, and this row,
+  // * as a picture, is the way in — in any folder, and with "在聊天列表顶部显示" off too
+  #column-left.is-collapsed:not(.has-open-tabs) & {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 .25rem;
+    padding: 0;
+    border-radius: 0;
+
+    .luckgram-ai-row-texts {
+      display: none;
+    }
+  }
+
+  &.hide {
+    display: none !important;
   }
 
   &:hover,
@@ -1097,9 +1139,9 @@ body.has-auth-pages {
   }
 
   .luckgram-ai-avatar {
-    width: 3.375rem;
-    height: 3.375rem;
-    font-size: 1.125rem;
+    width: 2.75rem;
+    height: 2.75rem;
+    font-size: 1rem;
   }
 
   &-texts {
