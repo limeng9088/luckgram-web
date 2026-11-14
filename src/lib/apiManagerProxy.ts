@@ -25,6 +25,7 @@ import SuperMessagePort from '@lib/superMessagePort';
 import IS_SHARED_WORKER_SUPPORTED from '@environment/sharedWorkerSupport';
 import {IS_SAFARI} from '@environment/userAgent';
 import toggleStorages from '@helpers/toggleStorages';
+import {onLuckgramLoggingOut} from '@/luckgram/core/logout';
 import App from '@config/app';
 import idleController from '@helpers/idleController';
 import ServiceMessagePort from '@lib/serviceWorker/serviceMessagePort';
@@ -643,9 +644,10 @@ class ApiManagerProxy extends MTProtoMessagePort {
       rootScope.managers.networkerFactory.forceReconnectTimeout();
     });
 
-    rootScope.addEventListener('logging_out', ({accountNumber, migrateTo}) => {
+    rootScope.addEventListener('logging_out', ({accountNumber, migrateTo, accountsLeft}) => {
       // const toClear: CacheStorageDbName[] = ['cachedFiles', 'cachedStreamChunks'];
       Promise.all([
+        onLuckgramLoggingOut(accountsLeft), // * done before the page reloads
         toggleStorages(false, true),
         Promise.race([
           // TODO: Check here

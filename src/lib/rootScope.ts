@@ -223,7 +223,8 @@ export type BroadcastEvents = {
 
   'service_notification': Update.updateServiceNotification,
 
-  'logging_out': {accountNumber?: ActiveAccountNumber, migrateTo?: ActiveAccountNumber},
+  // * accountsLeft (Luckgram): the accounts still signed in, counted where the log out was done
+  'logging_out': {accountNumber?: ActiveAccountNumber, migrateTo?: ActiveAccountNumber, accountsLeft?: number},
 
   'payment_sent': {peerId: PeerId, mid: number, receiptMessage: Message.messageService},
 

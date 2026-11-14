@@ -7,6 +7,8 @@ let appLangCode: string;
 
 /** Set once the first language is settled — followed from the browser, or picked (language.ts). */
 export const LUCKGRAM_LANG_FOLLOWED_KEY = 'lg_lang_followed';
+/** The language the last account was logged out in: the sign-in page takes it up again (language.ts). */
+export const LUCKGRAM_LANG_RESTORE_KEY = 'lg_lang_restore';
 
 function isLanguageSettled() {
   try {
@@ -18,6 +20,10 @@ function isLanguageSettled() {
 
 export function setLuckgramLangCode(langCode: string) {
   appLangCode = langCode;
+}
+
+export function getLuckgramLangCode() {
+  return appLangCode;
 }
 
 export function isLuckgramBrowserChinese() {
