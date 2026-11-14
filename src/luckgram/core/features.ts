@@ -19,6 +19,7 @@
 
 import LuckgramSettings from '@/luckgram/core/settings';
 import {isRemotelyAllowed} from '@/luckgram/core/remoteConfig';
+import {isHiddenByPreview} from '@/luckgram/core/preview';
 import {LUCKGRAM_CHANNEL} from '@/luckgram/config';
 
 /** The groups of the settings page, in display order; the same as on the phones. */
@@ -53,6 +54,18 @@ export type LuckgramFeature = {
 export const DEBUG_DEMO = 'debug_demo';
 
 export const FEATURES: LuckgramFeature[] = [
+  // ---- 消息与语言 / Messages & Language
+  {
+    key: 'translate_in', group: 'messages', default: true,
+    title: ['翻译收到的消息', 'Translate received messages'],
+    description: ['消息旁显示翻译图标，译文显示在原文下方', 'A translate icon beside messages; the translation appears under the original']
+  },
+  {
+    key: 'translate_out', group: 'messages', default: true,
+    title: ['发送前翻译', 'Translate before sending'],
+    description: ['输入框旁显示翻译按钮，把要发的话翻成对方的语言', 'A translate button by the message field turns what you wrote into the other side\'s language']
+  },
+
   // ---- 调试 / Debug
   {
     key: DEBUG_DEMO, group: 'debug', default: false, devOnly: true,
@@ -74,19 +87,25 @@ export function isFeatureLocallyEnabled(key: string, settings = LuckgramSettings
 
 /**
  * Whether a feature is on: the user's switch, falling back to the registry's default, and not
- * switched off by the server. Entry points read this, so a remotely disabled feature is gone everywhere.
+ * switched off by the server, and not held back on the preview list (preview.ts). Entry points read
+ * this, so a remotely disabled or not yet released feature is gone everywhere.
  */
 export function isFeatureEnabled(key: string) {
   const feature = findFeature(key);
   if(feature?.devOnly && !isDevToolsVisible()) return false;
-  return isRemotelyAllowed(key) && isFeatureLocallyEnabled(key);
+  return isFeatureAvailable(key) && isFeatureLocallyEnabled(key);
+}
+
+/** Whether the feature exists for this browser at all: allowed by the server and not hidden as a preview. */
+export function isFeatureAvailable(key: string) {
+  return isRemotelyAllowed(key) && !isHiddenByPreview(key);
 }
 
 export function setFeatureEnabled(key: string, enabled: boolean) {
   return LuckgramSettings.set(key, enabled);
 }
 
-/** The features of a group that have a row: not hidden by the server, not a debug one in production. */
-export function getVisibleFeatures(group: FeatureGroup, features = FEATURES, devTools = isDevToolsVisible(), allowed = isRemotelyAllowed) {
+/** The features of a group that have a row: not hidden by the server or the preview list, not a debug one in production. */
+export function getVisibleFeatures(group: FeatureGroup, features = FEATURES, devTools = isDevToolsVisible(), allowed = isFeatureAvailable) {
   return features.filter((feature) => feature.group === group && (!feature.devOnly || devTools) && allowed(feature.key));
 }

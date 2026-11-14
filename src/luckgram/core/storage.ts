@@ -6,20 +6,22 @@
  * Two object stores:
  *   settings  switches and values (LuckgramSettings), mirrored between tabs
  *   private   the device token and the like: never mirrored, never shown
+ *   cache     what can be asked for again: translations and which messages show them (W5), by account
  */
 
-export type LuckgramStoreName = 'settings' | 'private';
+export type LuckgramStoreName = 'settings' | 'private' | 'cache';
 
 export interface LuckgramStorage {
   getAll(store: LuckgramStoreName): Promise<Record<string, any>>;
   set(store: LuckgramStoreName, key: string, value: any): Promise<void>;
   delete(store: LuckgramStoreName, key: string): Promise<void>;
+  update(store: LuckgramStoreName, set: Record<string, any>, remove?: string[]): Promise<void>;
   clear(): Promise<void>;
 }
 
 const DB_NAME = 'luckgram';
-const DB_VERSION = 1;
-const STORES: LuckgramStoreName[] = ['settings', 'private'];
+const DB_VERSION = 2; // * 2: the `cache` store (W5)
+const STORES: LuckgramStoreName[] = ['settings', 'private', 'cache'];
 
 const promisify = <T>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
@@ -75,6 +77,14 @@ export class LuckgramIndexedDBStorage implements LuckgramStorage {
     await promisify((await this.store(name, 'readwrite')).delete(key));
   }
 
+  /** Several writes and removals of one store at once. */
+  public async update(name: LuckgramStoreName, set: Record<string, any>, remove: string[] = []) {
+    const store = await this.store(name, 'readwrite');
+    const requests: Promise<any>[] = remove.map((key) => promisify(store.delete(key)));
+    for(const key in set) requests.push(promisify(store.put(set[key], key)));
+    await Promise.all(requests);
+  }
+
   public async clear() {
     const db = await this.open();
     const transaction = db.transaction(STORES, 'readwrite');
@@ -84,7 +94,7 @@ export class LuckgramIndexedDBStorage implements LuckgramStorage {
 
 /** Kept in memory only: the tests', and a browser that gives the page no IndexedDB (some private modes). */
 export class LuckgramMemoryStorage implements LuckgramStorage {
-  private data: Record<LuckgramStoreName, Record<string, any>> = {settings: {}, private: {}};
+  private data: Record<LuckgramStoreName, Record<string, any>> = {settings: {}, private: {}, cache: {}};
 
   public async getAll(name: LuckgramStoreName) {
     return {...this.data[name]};
@@ -98,7 +108,12 @@ export class LuckgramMemoryStorage implements LuckgramStorage {
     delete this.data[name][key];
   }
 
+  public async update(name: LuckgramStoreName, set: Record<string, any>, remove: string[] = []) {
+    for(const key of remove) delete this.data[name][key];
+    Object.assign(this.data[name], set);
+  }
+
   public async clear() {
-    this.data = {settings: {}, private: {}};
+    this.data = {settings: {}, private: {}, cache: {}};
   }
 }
