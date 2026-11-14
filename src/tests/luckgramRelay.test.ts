@@ -47,13 +47,15 @@ describe('luckgram relay: the Worker\'s rules', () => {
   });
 
   test('only Luckgram Web may use it', () => {
-    for(const origin of ['https://web.luckgram.cc', 'https://web-dev.luckgram.cc', 'https://lgweb.cat158.com', 'https://feat-w2-relay.luckgram-web-dev.pages.dev']) {
+    for(const origin of ['https://web.luckgram.cc', 'https://lgweb.cat158.com', 'https://3f2a1b0c.luckgram-web.pages.dev']) {
       expect(isOriginAllowed(origin, allowed)).toBe(true);
     }
 
     for(const origin of [
       null, '', 'null', 'https://evil.example', 'http://web.luckgram.cc', 'https://web.luckgram.cc.evil.example',
-      'https://evil.example/https://web.luckgram.cc', 'https://a.b.luckgram-web-dev.pages.dev', 'https://luckgram-web-dev.pages.dev.evil.example',
+      'https://evil.example/https://web.luckgram.cc', 'https://a.b.luckgram-web.pages.dev', 'https://luckgram-web.pages.dev.evil.example',
+      // * the development site and its previews are gone (specs#167)
+      'https://web-dev.luckgram.cc', 'https://feat-w2-relay.luckgram-web-dev.pages.dev',
       'https://web.luckgram.cc:8443', 'http://localhost:8080'
     ]) {
       expect(isOriginAllowed(origin, allowed)).toBe(false);

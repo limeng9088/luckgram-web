@@ -9,12 +9,10 @@
  * dc is 1–5, "-1" marks Telegram's media (download / upload) endpoint; nothing else is forwarded.
  */
 
-/** Origins of Luckgram Web: production, development, the backup entrance, pull request previews. */
+/** Origins of Luckgram Web: production, the backup entrance, Cloudflare's addresses of the production project. */
 export const DEFAULT_ALLOWED_ORIGINS = [
   'https://web.luckgram.cc',
-  'https://web-dev.luckgram.cc',
   'https://lgweb.cat158.com',
-  'https://*.luckgram-web-dev.pages.dev',
   'https://*.luckgram-web.pages.dev'
 ];
 

@@ -30,6 +30,10 @@ in `src/luckgram/relay/`.
 | Development | `luckgram-relay-dev` (`--env dev`) | `ws-dev.luckgram.cc` |
 | Production | `luckgram-relay` (`--env production`) | `ws.luckgram.cc`, backup `lgws.cat158.com` |
 
+The development Worker is where a change to the relay is tried first. No deployed site uses it any more
+(luckgram-specs#167): point a local build at it (`LUCKGRAM_RELAYS=wss://ws-dev.luckgram.cc pnpm start`) after
+letting the local origin in (`ALLOWED_ORIGINS="http://localhost:8080"` on the Worker).
+
 ## Deploying
 
 The Web agent's CI token can only deploy Pages, so the Worker is deployed by the project manager
@@ -50,9 +54,9 @@ Checking a deployment:
 
 ```bash
 H='-H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Protocol: binary"'
-eval curl -s -o /dev/null -w '%{http_code}\\n' --http1.1 $H -H '"Origin: https://web-dev.luckgram.cc"' https://ws-dev.luckgram.cc/2/apiws   # 101
-eval curl -s -o /dev/null -w '%{http_code}\\n' --http1.1 $H -H '"Origin: https://evil.example"'        https://ws-dev.luckgram.cc/2/apiws   # 403
-eval curl -s -o /dev/null -w '%{http_code}\\n' --http1.1 $H -H '"Origin: https://web-dev.luckgram.cc"' https://ws-dev.luckgram.cc/6/apiws   # 404
+eval curl -s -o /dev/null -w '%{http_code}\\n' --http1.1 $H -H '"Origin: https://web.luckgram.cc"'     https://ws.luckgram.cc/2/apiws   # 101
+eval curl -s -o /dev/null -w '%{http_code}\\n' --http1.1 $H -H '"Origin: https://evil.example"'        https://ws.luckgram.cc/2/apiws   # 403
+eval curl -s -o /dev/null -w '%{http_code}\\n' --http1.1 $H -H '"Origin: https://web.luckgram.cc"'     https://ws.luckgram.cc/6/apiws   # 404
 ```
 
 Running it locally (no Cloudflare account needed), with the web app's dev server pointed at it:
