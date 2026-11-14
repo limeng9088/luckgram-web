@@ -40,6 +40,24 @@ export function luckgramPluralLocale(langCode: string) {
   return (langCode || 'en').replace(/-raw$/i, '');
 }
 
+/**
+ * A language pack's code as the `lang` of the document: a valid BCP 47 tag in its canonical case
+ * ("zh-hans-raw" → "zh-Hans", "pt-br" → "pt-BR"). Screen readers, spell checking, hyphenation and
+ * the browser's offer to translate go by it; a tag they do not know is as good as none (specs#173).
+ */
+export function luckgramHtmlLang(langCode: string) {
+  const tag = luckgramPluralLocale(langCode);
+  try {
+    return Intl.getCanonicalLocales(tag)[0];
+  } catch(err) {
+    try {
+      return Intl.getCanonicalLocales(tag.split('-', 1)[0])[0];
+    } catch(err) {
+      return 'en';
+    }
+  }
+}
+
 export function lgText(zh: string, en: string) {
   return isLuckgramChinese() ? zh : en;
 }
