@@ -498,6 +498,24 @@ body.has-auth-pages {
 // * dictation: its button beside the emoji button, and the bar over the field while it listens
 .luckgram-dictation {
   flex: 0 0 auto;
+  position: relative;
+
+  // * a small "A" on the microphone: this one writes text, upstream's own records a voice message
+  &::after {
+    content: 'A';
+    position: absolute;
+    inset-block-end: .375rem;
+    inset-inline-end: .375rem;
+    min-width: .875rem;
+    height: .875rem;
+    padding: 0 .125rem;
+    border-radius: .25rem;
+    background: var(--surface-color);
+    color: inherit;
+    font: 700 .625rem/.875rem var(--font-regular, sans-serif);
+    text-align: center;
+    pointer-events: none;
+  }
 
   &.is-recording {
     color: var(--danger-color);
