@@ -8,6 +8,7 @@ import {redirectToCanonical} from '@/luckgram/canonical';
 import {watchForLuckgramUpdate} from '@/luckgram/update';
 import {initRoutePage} from '@/luckgram/relay/page';
 import {connection} from '@/luckgram/relay/appConnection';
+import {initLuckgramCore} from '@/luckgram/core/init';
 import './luckgram.scss';
 
 function mountDevBadge() {
@@ -24,4 +25,5 @@ export function initLuckgram() {
   if(LUCKGRAM_IS_DEV) mountDevBadge();
   watchForLuckgramUpdate();
   initRoutePage(connection);
+  initLuckgramCore();
 }

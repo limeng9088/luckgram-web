@@ -27,7 +27,6 @@ import {clearLogs, createLogsFile, downloadLogsFile, setLogsCollected} from '@li
 import {isMemoryWatchOn, startMemoryWatch, stopMemoryWatch} from '@lib/debug/memoryWatch';
 import I18n, {i18n, LangPackKey} from '@lib/langPack';
 import {useAppSettings} from '@stores/appSettings';
-import LuckgramConnectionSection from '@/luckgram/relay/connectionSection';
 
 type AppExperimentalTabType = typeof AppExperimentalTab;
 
@@ -419,8 +418,6 @@ const ExperimentalTab = () => {
           )}</For>
         </Section>
       </Show>
-
-      <LuckgramConnectionSection />
 
       <Section name="Experimental.Engine">
         <RestartToggle flag="noSharedWorker" title="Experimental.SharedWorker" subtitle="Experimental.SharedWorker.Subtitle" inverted />

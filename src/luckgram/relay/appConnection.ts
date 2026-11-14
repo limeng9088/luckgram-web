@@ -9,6 +9,8 @@ import rootScope from '@lib/rootScope';
 import {getCurrentAccount} from '@lib/accounts/getCurrentAccount';
 import {ConnectionStatus} from '@lib/mtproto/connectionStatus';
 import type {RoutePageOptions} from '@/luckgram/relay/page';
+import {createEffect, createRoot} from 'solid-js';
+import {remoteBool, remoteConfig, remoteStrings} from '@/luckgram/core/remoteConfig';
 
 export const connection: RoutePageOptions = {
   onRetry: () => {
@@ -24,6 +26,21 @@ export const connection: RoutePageOptions = {
   },
   onConnectionChange: (callback) => {
     rootScope.addEventListener('connection_status_change', callback);
+  },
+  relays: () => {
+    const relays = remoteStrings('web.relays');
+    return relays?.length ? relays : undefined;
+  },
+  relayMedia: () => remoteBool('web.relay_media', true),
+  onRemoteChange: (callback) => {
+    let version = remoteConfig().version, fetchedAt = remoteConfig().fetchedAt;
+    createRoot(() => createEffect(() => {
+      const config = remoteConfig();
+      if(config.version === version && !!config.fetchedAt === !!fetchedAt) return;
+      version = config.version;
+      fetchedAt = config.fetchedAt;
+      callback();
+    }));
   },
   account: () => getCurrentAccount(),
   onAccountChange: (callback) => {

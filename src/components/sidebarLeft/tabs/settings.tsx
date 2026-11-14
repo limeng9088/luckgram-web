@@ -36,6 +36,7 @@ import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 import A11yButton from '@components/a11yButton';
 import {getAppVersionText} from '@config/app';
 import LuckgramSourceLink from '@/luckgram/sourceLink';
+import LuckgramSettingsRow from '@/luckgram/ui/settingsRow';
 import {getKeptFlags} from '@config/modes';
 import styles from '@components/sidebarLeft/tabs/settings.module.scss';
 import type {WalletStatus} from '@appManagers/appWalletManager';
@@ -472,6 +473,7 @@ const Settings = () => {
           </Row>
         </div>
       </Section>
+      <LuckgramSettingsRow />
       <Show when={!premiumBlocked()}>
         <Section>
           <Row clickable={() => hotReloadGuard.showPremiumPopup()}>

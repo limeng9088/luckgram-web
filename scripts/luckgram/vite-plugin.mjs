@@ -116,6 +116,23 @@ export function getLuckgramRelays(env = process.env) {
   return LUCKGRAM_RELAYS[getLuckgramChannel(env)];
 }
 
+/**
+ * The entries of the Luckgram API a build talks to (luckgram-specs#139, W3 需求 5): the main one,
+ * then the backup for when luckgram.cc cannot be reached. The development address and a local build
+ * use the dev server; LUCKGRAM_API_URLS replaces them.
+ */
+/** @type {Record<string, string[]>} */
+export const LUCKGRAM_API_URLS = {
+  prod: ['https://api.luckgram.cc', 'https://lg.cat158.com'],
+  dev: ['https://api-dev.luckgram.cc', 'https://lg-dev.cat158.com'],
+  local: ['https://api-dev.luckgram.cc', 'https://lg-dev.cat158.com']
+};
+
+export function getLuckgramApiUrls(env = process.env) {
+  if(env.LUCKGRAM_API_URLS !== undefined) return env.LUCKGRAM_API_URLS.split(/[\s,]+/).filter(Boolean);
+  return LUCKGRAM_API_URLS[getLuckgramChannel(env)];
+}
+
 export function getLuckgramBuildInfo(env = process.env) {
   return {
     channel: getLuckgramChannel(env),
@@ -145,7 +162,8 @@ export default function luckgramPlugin() {
         'import.meta.env.VITE_LG_BUILD': JSON.stringify(info.build),
         'import.meta.env.VITE_LG_COMMIT': JSON.stringify(command === 'build' ? info.commit : ''),
         'import.meta.env.VITE_LG_CHANNEL': JSON.stringify(info.channel),
-        'import.meta.env.VITE_LG_RELAYS': JSON.stringify(getLuckgramRelays().join(','))
+        'import.meta.env.VITE_LG_RELAYS': JSON.stringify(getLuckgramRelays().join(',')),
+        'import.meta.env.VITE_LG_API_URLS': JSON.stringify(process.env.VITEST ? '' : getLuckgramApiUrls().join(','))
       };
 
       const isTest = !!process.env.VITEST;

@@ -873,3 +873,30 @@ describe('luckgram relay: the connection that tries the routes', () => {
     expect(FakeSocket.all.map((socket) => socket.url)).toEqual([MEDIA]);
   });
 });
+
+describe('luckgram relay: the page\'s settings', () => {
+  beforeEach(() => localStorage.clear());
+
+  // * the module reads the settings as it loads: importing it must not throw (it once did, in a built bundle only)
+  test('the settings as stored, before and after the server has spoken', async() => {
+    const {readRouteConfig, initRoutePage, routeStatus} = await import('@/luckgram/relay/page');
+    expect(routeStatus().mode).toBe('auto');
+    expect(readRouteConfig()).toMatchObject({mode: 'auto', relayMedia: true});
+
+    localStorage.setItem('lg_route_mode', 'relay');
+    localStorage.setItem('lg_route_preferred', RELAY);
+    expect(readRouteConfig()).toMatchObject({mode: 'relay', preferred: RELAY});
+
+    let relays = [BACKUP], relayMedia = true;
+    initRoutePage({relays: () => relays, relayMedia: () => relayMedia});
+    expect(readRouteConfig().relays).toEqual([BACKUP]);
+    relayMedia = false;
+    expect(readRouteConfig().relayMedia).toBe(false);
+
+    // * nothing from the server: the build's list stays; a list set by hand wins over both
+    relays = undefined;
+    expect(readRouteConfig().relays).toEqual([]);
+    localStorage.setItem('lg_relays', 'ws.luckgram.cc');
+    expect(readRouteConfig().relays).toEqual([RELAY]);
+  });
+});

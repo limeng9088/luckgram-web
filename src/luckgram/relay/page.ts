@@ -6,8 +6,10 @@
  * and are changed from Settings → Experimental (connectionSection.tsx):
  *   lg_route_mode       auto | official | relay
  *   lg_route_preferred  what connected last time
- *   lg_relays           relays instead of the build's (testing)            — later remote config web.relays
- *   lg_relay_media      "0": media connections never use a relay (testing) — later remote config web.relay_media
+ *   lg_relays           relays instead of the server's and the build's (testing)
+ *   lg_relay_media      "0": media connections never use a relay (testing)
+ * The relays themselves and whether media may use them come from remote config: `web.relays`,
+ * `web.relay_media` (appConnection.ts), falling back to the build's list.
  */
 
 import {createSignal} from 'solid-js';
@@ -36,15 +38,22 @@ const write = (key: string, value: string | undefined) => {
   } catch(err) {}
 };
 
+/**
+ * Where the server's say comes from (W3): set by `initRoutePage`. Declared above everything that
+ * reads the settings — the module itself reads them once as it loads.
+ */
+let remote: {relays?: () => string[] | undefined, relayMedia?: () => boolean | undefined} = {};
+
 export function readRouteConfig(): RouteConfig {
   const config = getDefaultRouteConfig();
   const mode = read(MODE_KEY);
   if(isRouteMode(mode)) config.mode = mode;
 
-  const relays = normalizeRelays(read(RELAYS_KEY) || undefined);
+  // * the server's list (remote config web.relays) replaces the build's; lg_relays is for testing one by hand
+  const relays = normalizeRelays(read(RELAYS_KEY) || remote.relays?.() || undefined);
   if(relays.length) config.relays = relays;
 
-  if(read(RELAY_MEDIA_KEY) === '0') config.relayMedia = false;
+  if(read(RELAY_MEDIA_KEY) === '0' || remote.relayMedia?.() === false) config.relayMedia = false;
   config.preferred = read(PREFERRED_KEY) || undefined;
   return config;
 }
@@ -120,6 +129,12 @@ export type RoutePageOptions = {
   isConnected?: () => Promise<boolean>,
   /** calls back whenever the app's connection changes */
   onConnectionChange?: (callback: () => void) => void,
+  /** remote config `web.relays`: the relays in order, or nothing when the server has not said */
+  relays?: () => string[] | undefined,
+  /** remote config `web.relay_media` */
+  relayMedia?: () => boolean | undefined,
+  /** calls back whenever the remote config changes */
+  onRemoteChange?: (callback: () => void) => void,
   /** the account on screen in this tab */
   account?: () => number,
   /** calls back when this tab shows another account */
@@ -132,6 +147,9 @@ export function initRoutePage(options: RoutePageOptions = {}) {
   getAccount = options.account;
   options.onAccountChange?.(() => sendConfig());
   isConnected = options.isConnected;
+  remote = {relays: options.relays, relayMedia: options.relayMedia};
+  // * a relay the server added or dropped is used from the next connection on, without a new build
+  options.onRemoteChange?.(() => sendConfig());
   options.onConnectionChange?.(() => {
     if(!document.getElementById(BAR_ID)) return;
     Promise.resolve(isConnected?.()).catch(() => false).then((connected) => connected && hideBar());
