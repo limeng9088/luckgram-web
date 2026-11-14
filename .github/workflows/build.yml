@@ -61,3 +61,25 @@ jobs:
         run: |
           node scripts/luckgram/assemble.mjs
           node scripts/luckgram/check-site.mjs
+
+      # * There is no development site and no preview (luckgram-specs#167): the site of a pull request is
+      # * tried on the tester's own computer. The artifact is the site exactly as a merge would release it,
+      # * and the script that serves it (README.md, "Trying a pull request"). It holds nothing the public
+      # * site does not: the build's api_id / api_hash are in every Telegram client's scripts.
+      - name: Put the site and its server together
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p tmp/luckgram-artifact
+          mv tmp/luckgram-site tmp/luckgram-artifact/site
+          cp scripts/luckgram/serve.mjs tmp/luckgram-artifact/serve.mjs
+
+      - name: Upload the site (3 days)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: luckgram-web-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
+          path: tmp/luckgram-artifact
+          retention-days: 3
+          compression-level: 6
+          include-hidden-files: true
+          if-no-files-found: error

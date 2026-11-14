@@ -180,3 +180,62 @@ describe('luckgram accounts: an empty slot costs nothing', () => {
     expect(made.accounts.length).toBe(3);
   });
 });
+
+// ---- a pull request's site is tried on the tester's computer (scripts/luckgram/serve.mjs, specs#167)
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {CONTENT_TYPES, headersFor, resolveFile} from '../../scripts/luckgram/serve.mjs';
+
+describe('luckgram: the server that tries a built site locally', () => {
+  const HEADERS = [
+    '/*',
+    '  Content-Security-Policy: default-src \'self\'; connect-src \'self\' https://*.telegram.org',
+    '  X-Content-Type-Options: nosniff',
+    '',
+    'https://:project.pages.dev/*',
+    '  X-Robots-Tag: noindex, nofollow',
+    '',
+    '/luckgram-version',
+    '  Cache-Control: no-store',
+    ''
+  ].join('\n');
+
+  test('the site\'s own headers: the policy on every path, a path\'s own on that path, another host\'s on none', () => {
+    expect(headersFor(HEADERS, '/')).toEqual({
+      'Content-Security-Policy': 'default-src \'self\'; connect-src \'self\' https://*.telegram.org',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    expect(headersFor(HEADERS, '/luckgram-version')['Cache-Control']).toBe('no-store');
+    expect(headersFor(HEADERS, '/fAbCdEfGh.js')['Cache-Control']).toBeUndefined();
+    expect(headersFor(HEADERS, '/')['X-Robots-Tag']).toBeUndefined();
+    expect(headersFor('', '/')).toEqual({});
+  });
+
+  test('files of the site and nothing outside it', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lg-serve-'));
+    try {
+      fs.mkdirSync(path.join(root, 'site', 'assets'), {recursive: true});
+      fs.writeFileSync(path.join(root, 'site', 'index.html'), '<html></html>');
+      fs.writeFileSync(path.join(root, 'site', 'assets', 'a b.png'), 'x');
+      fs.writeFileSync(path.join(root, 'secret.txt'), 'x');
+      const site = path.join(root, 'site');
+
+      expect(resolveFile(site, '/')).toBe(path.join(site, 'index.html'));
+      expect(resolveFile(site, '/index.html')).toBe(path.join(site, 'index.html'));
+      expect(resolveFile(site, '/assets/a%20b.png')).toBe(path.join(site, 'assets', 'a b.png'));
+      for(const pathname of ['/../secret.txt', '/..%2Fsecret.txt', '/%2e%2e/secret.txt', '/assets/../../secret.txt', '/nope.js', '/assets/', '/%E0%A4%A', '/a%00b']) {
+        expect(resolveFile(site, pathname)).toBeUndefined();
+      }
+    } finally {
+      fs.rmSync(root, {recursive: true, force: true});
+    }
+  });
+
+  test('scripts, styles, the manifest and WebAssembly go out as what they are: a browser refuses them otherwise', () => {
+    expect(CONTENT_TYPES['.js']).toMatch(/^text\/javascript/);
+    expect(CONTENT_TYPES['.css']).toMatch(/^text\/css/);
+    expect(CONTENT_TYPES['.wasm']).toBe('application/wasm');
+    expect(CONTENT_TYPES['.webmanifest']).toMatch(/^application\/manifest\+json/);
+  });
+});
