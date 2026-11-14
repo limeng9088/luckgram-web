@@ -166,6 +166,13 @@ export function shouldOfferQuickTranslate(options: {
   return !options.doNotTranslate.map(normalizeLang).includes(detected);
 }
 
+/** Whether the sender is the account itself (Saved Messages: such a message has no `out` flag). */
+export function isOwnSender(message: {fromId?: any, peerId?: any, fwd_from?: any}, account: number | string) {
+  const from = message.fromId ?? message.peerId;
+  // * forwarded into Saved Messages from somebody else: theirs
+  return String(from) === String(account) && !message.fwd_from;
+}
+
 /** Whether formatting would be lost: the original had some, the translation is plain text. */
 export function isFormattingLost(original: TranslationEntity[] | undefined, translation: Translation) {
   if(translation.via !== 'luckgram') return false;

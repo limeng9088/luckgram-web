@@ -1279,7 +1279,8 @@ export default class ChatContextMenu {
         },
         verify: () => {
           if(this.selectedMessages || !canTranslateInBubble(this.message as Message.message, this.isTextSelected)) return false;
-          if(item.textElement) item.textElement.textContent = getTranslateMenuText(this.message as Message.message);
+          // * the menu is built after this was asked, from `regularText`
+          item.regularText = getTranslateMenuText(this.message as Message.message);
           return true;
         }
       };

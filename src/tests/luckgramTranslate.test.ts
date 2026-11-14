@@ -9,7 +9,7 @@ import {TranslationCache} from '@/luckgram/translate/cache';
 import {TranslateDeps, TranslateError, createTranslator} from '@/luckgram/translate/service';
 import {
   CACHE_MAX_AGE_MS, getIncomingTargetLang, getKeysToPrune, getOutLang, getOutgoingTargetLang, getTranslateFailure, getTranslateFailureText,
-  hashText, isFormattingLost, normalizeLang, parseOutLangs, rememberOutLang, shouldOfferQuickTranslate, stateKey, translationKey
+  hashText, isFormattingLost, isOwnSender, normalizeLang, parseOutLangs, rememberOutLang, shouldOfferQuickTranslate, stateKey, translationKey
 } from '@/luckgram/translate/logic';
 
 describe('luckgram: the preview list', () => {
@@ -69,6 +69,14 @@ describe('luckgram translation: the rules', () => {
     expect(shouldOfferQuickTranslate({...base, detected: undefined})).toBe(false);
     expect(shouldOfferQuickTranslate({...base, doNotTranslate: ['zh', 'en']})).toBe(false);
     expect(shouldOfferQuickTranslate({...base, detected: 'zh'})).toBe(false);
+  });
+
+  test('whose message it is: Saved Messages has no out flag, the sender says it', () => {
+    expect(isOwnSender({fromId: 5, peerId: 5}, 5)).toBe(true);
+    expect(isOwnSender({peerId: 5}, 5)).toBe(true);
+    expect(isOwnSender({fromId: 7, peerId: 5}, 5)).toBe(false);
+    // * forwarded into Saved Messages from somebody else
+    expect(isOwnSender({fromId: 5, peerId: 5, fwd_from: {}}, 5)).toBe(false);
   });
 
   test('errors: the phones\' four texts', () => {

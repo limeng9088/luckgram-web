@@ -374,7 +374,8 @@ body.has-auth-pages {
   }
 }
 
-// * the one-tap icon beside somebody else's message: on hover with a mouse, always on a touch screen
+// * the one-tap icon beside somebody else's message: on hover with a mouse, always on a touch screen.
+// * Only received messages have it: they stand at the start side, with room after them at any width.
 .luckgram-translate-button {
   position: absolute;
   inset-block-start: 0;
@@ -386,8 +387,10 @@ body.has-auth-pages {
   align-items: center;
   justify-content: center;
   font-size: 1.125rem;
-  color: #fff;
-  background-color: var(--message-highlighting-color, rgba(0, 0, 0, .3));
+  // * the theme's own surface and text colours: readable in the dark theme and over any wallpaper
+  color: var(--secondary-text-color);
+  background-color: var(--surface-color);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
   cursor: pointer;
   opacity: 0;
   transition: opacity .15s;
@@ -396,6 +399,11 @@ body.has-auth-pages {
   // * upstream's own button of a long message sits at the same corner
   .bubble.with-beside-button & {
     inset-block-start: 2.75rem;
+  }
+
+  // * never past the window's edge: a bubble as wide as a narrow window keeps the icon over its corner
+  @media (max-width: 600px) {
+    inset-inline-start: min(calc(100% + .375rem), calc(100vw - 4.5rem));
   }
 
   .bubble:hover &,
@@ -410,6 +418,7 @@ body.has-auth-pages {
   }
 
   &.is-active {
+    color: #fff;
     background-color: var(--primary-color);
   }
 }
