@@ -8,7 +8,6 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
 | | |
 |---|---|
 | Production | https://web.luckgram.cc (backup entrance https://lgweb.cat158.com) |
-| Development | https://web-dev.luckgram.cc — every commit of `master`, marked **DEV** |
 | Source | https://github.com/limeng9088/luckgram-web |
 
 ### Upstream
@@ -48,11 +47,16 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   node scripts/luckgram/assemble.mjs               # → tmp/luckgram-site, what is deployed
   node scripts/luckgram/check-site.mjs
   ```
-- `.github/workflows/build.yml` — every push to `master`, pull request and manual run: tests, type check,
-  build. `master` is deployed to Cloudflare Pages project `luckgram-web-dev` (https://web-dev.luckgram.cc), a
-  pull request to a preview (`https://<branch>.luckgram-web-dev.pages.dev`) that is linked in the pull request.
-- `.github/workflows/release.yml` — run by hand with a commit of `master`: deploys the production address
-  (Cloudflare Pages project `luckgram-web`). Nothing else deploys production.
+- `.github/workflows/build.yml` — every pull request and manual run: tests, type check,
+  build, and the site put together and checked as a production site. It deploys nothing.
+- `.github/workflows/release.yml` — every push to `master` (a merged pull request), after the same tests, type
+  check, build and site check: deploys the production address (Cloudflare Pages project `luckgram-web`). Run by
+  hand with a commit of `master` it deploys that commit — the way back to an earlier one. Nothing else deploys
+  production.
+- **There is no development site and there are no pull request previews** (luckgram-specs#167): a sign-in page
+  for Telegram accounts on one more host is one more host for Google Safe Browsing to list as deceptive, as it
+  did with `web-dev.luckgram.cc`. What is merged is what users get, so a change is tried on a local build
+  (`pnpm start`, or the commands above and any static server) before it is merged, and on production after.
 - The deployed page only talks to Telegram's servers and Luckgram's own domains; the
   Content-Security-Policy in `scripts/luckgram/headers.mjs` enforces it.
 

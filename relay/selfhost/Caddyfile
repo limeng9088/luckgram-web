@@ -6,14 +6,14 @@
 
 relay.example.com {
 	@relay path_regexp relay ^/([1-5])(-1)?/(apiws|apiws_premium)$
-	@allowed header_regexp Origin ^https://(web\.luckgram\.cc|web-dev\.luckgram\.cc|lgweb\.cat158\.com|[a-z0-9-]+\.luckgram-web-dev\.pages\.dev|[a-z0-9-]+\.luckgram-web\.pages\.dev)$
+	@allowed header_regexp Origin ^https://(web\.luckgram\.cc|lgweb\.cat158\.com|[a-z0-9-]+\.luckgram-web\.pages\.dev)$
 	@websocket header Upgrade websocket
 
 	handle @relay {
 		@notGet not method GET
 		respond @notGet 404
 
-		@forbidden not header_regexp Origin ^https://(web\.luckgram\.cc|web-dev\.luckgram\.cc|lgweb\.cat158\.com|[a-z0-9-]+\.luckgram-web-dev\.pages\.dev|[a-z0-9-]+\.luckgram-web\.pages\.dev)$
+		@forbidden not header_regexp Origin ^https://(web\.luckgram\.cc|lgweb\.cat158\.com|[a-z0-9-]+\.luckgram-web\.pages\.dev)$
 		respond @forbidden 403
 
 		@plain not header Upgrade websocket
