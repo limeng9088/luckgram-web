@@ -2,7 +2,7 @@
 
 import lang from '@/lang';
 import langSign from '@/langSign';
-import zh from '@/luckgram/zhStrings';
+import zh, {LUCKGRAM_ZH_PARTS} from '@/luckgram/zhStrings';
 import {getLuckgramZhTexts, isLuckgramZhOverlayLang, luckgramZhString, resetLuckgramZhTexts} from '@/luckgram/zhOverlay';
 
 const english: {[key: string]: any} = {...lang, ...langSign};
@@ -24,8 +24,36 @@ describe('luckgram: Chinese texts for what the Chinese pack lacks', () => {
       if(typeof(text) === 'string') {
         expect(marks(text), key).toBe(marks(source));
       } else {
-        for(const form in text) expect(marks(text[form]), key).toBe(marks(source.other_value));
+        for(const form in text) expect(marks(text[form]), key + ' ' + form).toBe(marks(source[form] ?? source.other_value));
       }
+    }
+  });
+
+  test('a key is written once, and the forms of a pluralized string are those of the English', () => {
+    const seen = new Map<string, string>();
+    for(const part in LUCKGRAM_ZH_PARTS) {
+      for(const key in LUCKGRAM_ZH_PARTS[part]) {
+        expect(seen.get(key), key + ' is in ' + part + ' too').toBeUndefined();
+        seen.set(key, part);
+      }
+    }
+
+    for(const key in zh) {
+      if(typeof(zh[key]) === 'string') continue;
+      expect(Object.keys(zh[key]).sort(), key).toEqual(Object.keys(english[key]).sort());
+    }
+  });
+
+  test('the glossary: the words of Telegram\'s own Chinese pack', () => {
+    // * one way to say a thing (zh/GLOSSARY.md); a word on the left is not used
+    const avoided: [RegExp, string][] = [
+      [/你/, '您'], [/收藏夹/, '我的收藏'], [/隐私与安全/, '隐私和安全'], [/摄像头/, '相机'], [/防剧透|剧透/, '遮罩'],
+      [/信息(?!流)/, '消息'], [/对话/, '聊天'], [/\.\.\./, '…'], [/故事/, '动态'], [/反应/, '表情回应'], [/超级群/, '群组']
+    ];
+    for(const key in zh) {
+      if(key.endsWith('.SearchKeywords')) continue;
+      const text = typeof(zh[key]) === 'string' ? zh[key] as string : Object.values(zh[key]).join(' ');
+      for(const [word, instead] of avoided) expect(word.test(text), `${key}: ${text} (use ${instead})`).toBe(false);
     }
   });
 
