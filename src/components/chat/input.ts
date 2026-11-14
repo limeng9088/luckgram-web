@@ -13,6 +13,7 @@ import {
 import getAiEditorRequest from '@components/richMessageInput/aiRequest';
 import LuckgramTranslateOut from '@/luckgram/translate/outgoing';
 import LuckgramDictation from '@/luckgram/voice/dictation';
+import LuckgramAiWriting from '@/luckgram/writing/controller';
 import type {ComposeMessageWithAiResult} from '@appManagers/aiTonesManager';
 import AiSendSparkles from '@components/chat/aiSendSparkles';
 import AiRewriteEffect from '@components/chat/aiRewriteEffect';
@@ -441,6 +442,8 @@ export default class ChatInput {
   public luckgramTranslateOut: LuckgramTranslateOut;
   // * Luckgram (W6): speech put into the field as text
   public luckgramDictation: LuckgramDictation;
+  // * Luckgram (W7): the ✦ button — AI writing, AI reply
+  public luckgramAiWriting: LuckgramAiWriting;
   /** layer 229: a bot is streaming text into this chat/topic and lets us stop it */
   private streamStoppable = false;
   private sendBtnIcon: ChatSendBtnIcon;
@@ -1906,6 +1909,7 @@ export default class ChatInput {
     this.newMessageWrapper.append(this.btnSendContainer);
     this.luckgramTranslateOut?.mount();
     (this.luckgramDictation ??= new LuckgramDictation(this)).mount();
+    (this.luckgramAiWriting ??= new LuckgramAiWriting(this)).mount();
 
     // The voice + round-video recording panels are constructed and mounted by
     // ChatRecording (built in constructRecorder below): the voice panel is
@@ -5139,6 +5143,7 @@ export default class ChatInput {
   public updateSendBtn() {
     this.luckgramTranslateOut?.update();
     this.luckgramDictation?.update();
+    this.luckgramAiWriting?.update();
     let icon: ChatSendBtnIcon;
 
     const isInputEmpty = this.isInputEmpty();
@@ -5264,6 +5269,7 @@ export default class ChatInput {
 
   public onMessageSent(clearInput = true, clearReply?: boolean, skipReadHistory = false) {
     this.luckgramTranslateOut?.reset();
+    this.luckgramAiWriting?.reset();
     if(!skipReadHistory && !PEER_EXCEPTIONS.has(this.chat.type)) {
       this.managers.appMessagesManager.readAllHistory(this.chat.peerId, this.chat.threadId, true);
     }

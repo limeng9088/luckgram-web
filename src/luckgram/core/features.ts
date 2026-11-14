@@ -76,6 +76,18 @@ export const FEATURES: LuckgramFeature[] = [
     description: ['输入框旁的按钮：说话，转成文字插入光标处', 'A button by the message field: speak, and the words are inserted at the cursor']
   },
 
+  // ---- AI
+  {
+    key: 'ai_writing', group: 'ai', default: true,
+    title: ['AI 写作', 'AI writing'],
+    description: ['输入框的 ✦ 按钮：润色、更正式、更友好、更简短、修正语法', 'The ✦ button of the message field: polish, more formal, friendlier, shorter, fix grammar']
+  },
+  {
+    key: 'ai_reply', group: 'ai', default: true,
+    title: ['AI 回复', 'AI reply'],
+    description: ['「帮我回复」：根据对话给出三条不同语气的回复供挑选', '"Help me reply": three replies in different tones to pick from, fitting the conversation']
+  },
+
   // ---- 调试 / Debug
   {
     key: DEBUG_DEMO, group: 'debug', default: false, devOnly: true,
