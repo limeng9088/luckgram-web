@@ -295,7 +295,8 @@ describe('luckgram API client', () => {
   });
 
   test('a refusal without a time is not remembered; a clock set back does not lock registration', async() => {
-    let time = 5000_000, status = 429;
+    const time = 5000_000;
+    let status = 429;
     const {api, calls, settings} = await setup((call) =>
       call.url.endsWith('/v1/devices') ? (status === 429 ? json(429, {error: {code: 'rate_limited'}}) : json(201, {token: 'tok-1'})) : json(200, {}), () => time);
 

@@ -20,7 +20,7 @@ import commonStateStorage from '@lib/commonStateStorage';
 import Icon from '@components/icon';
 import currencyStarIcon from '@components/currencyStarIcon';
 import {luckgramBrandString} from '@/luckgram/brandStrings';
-import {setLuckgramLangCode} from '@/luckgram/text';
+import {luckgramPluralLocale, setLuckgramLangCode} from '@/luckgram/text';
 
 export const langPack: {[actionType: string]: LangPackKey} = {
   'messageActionChatCreate': 'ActionCreateGroup',
@@ -328,14 +328,14 @@ namespace I18n {
     }
 
     try {
-      pluralRules = new Intl.PluralRules(lastRequestedNormalizedLangCode);
+      pluralRules = new Intl.PluralRules(luckgramPluralLocale(lastRequestedNormalizedLangCode));
     } catch(err) {
       console.error('pluralRules error', err);
       pluralRules = new Intl.PluralRules(lastRequestedNormalizedLangCode.split('-', 1)[0]);
     }
 
     try {
-      pluralRules = new Intl.PluralRules(langPack.lang_code);
+      pluralRules = new Intl.PluralRules(luckgramPluralLocale(langPack.lang_code));
     } catch(err) {
       console.error('pluralRules error', err);
       pluralRules = new Intl.PluralRules(langPack.lang_code.split('-', 1)[0]);
