@@ -71,20 +71,35 @@ export function onLuckgramLoggingOut(
  * An account is leaving and others stay (W5, W8): when it is this tab's own account, what was kept
  * for it alone — the assistant's conversations, its translations and transcriptions — goes with it.
  * An account that leaves elsewhere is cleaned up as the page next starts (assistant/entries.ts).
+ *
+ * Whoever keeps something by account registers here. Nothing of theirs is imported, not even
+ * lazily: this module is imported by apiManagerProxy, which half the app imports, and an import
+ * from here into the interface would tie the two into one cycle (src/tests: the import graph).
+ */
+type AccountLeavingHandler = (account: number | string) => unknown;
+const accountLeavingHandlers: AccountLeavingHandler[] = [];
+
+export function onAccountLeaving(handler: AccountLeavingHandler) {
+  accountLeavingHandlers.push(handler);
+  return () => {
+    const index = accountLeavingHandlers.indexOf(handler);
+    if(index !== -1) accountLeavingHandlers.splice(index, 1);
+  };
+}
+
+/**
  * @param isOwn whether the leaving account is the one this tab shows
- * @returns done when it is gone; never rejects
+ * @returns done when its data is gone; never rejects
  */
 export async function onLuckgramAccountLeaving(isOwn: boolean, account: number | string | undefined): Promise<void> {
   if(!isOwn || !account) return;
-  try {
-    const [{deleteAssistantAccount}, {translationCache}] = await Promise.all([
-      import('@/luckgram/assistant/open'),
-      import('@/luckgram/translate')
-    ]);
-    await Promise.all([deleteAssistantAccount(account), translationCache.clearAccount(account)]);
-  } catch(err) {
-    console.warn('[luckgram] log out: the account\'s own data', (err as Error)?.message);
-  }
+  await Promise.all(accountLeavingHandlers.map(async(handler) => {
+    try {
+      await handler(account);
+    } catch(err) {
+      console.warn('[luckgram] log out: the account\'s own data', (err as Error)?.message);
+    }
+  }));
 }
 
 /** As the page starts: finishes a clearing that the reload cut short. */

@@ -11,6 +11,7 @@
 import LuckgramSettings from '@/luckgram/core/settings';
 import {isFeatureEnabled} from '@/luckgram/core/features';
 import {watchFeatures} from '@/luckgram/core/hooks';
+import {onAccountLeaving} from '@/luckgram/core/logout';
 import {lgText} from '@/luckgram/text';
 import {AI_ASSISTANT, KEY_PIN} from '@/luckgram/assistant/logic';
 import {takeStartedAtAssistant} from '@/luckgram/assistant/start';
@@ -97,6 +98,9 @@ export function mountAssistantEntries(options: {
 
   LuckgramSettings.ready.then(update);
   update();
+
+  // * this tab's account logs out: its conversations go with it, whether the page was ever opened or not
+  onAccountLeaving((account) => import('@/luckgram/assistant/open').then((module) => module.deleteAssistantAccount(account)));
 
   startOnce();
 }

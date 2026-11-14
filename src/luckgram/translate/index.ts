@@ -9,12 +9,15 @@ import I18n from '@lib/langPack';
 import detectLanguage from '@lib/tinyld/detect';
 import LuckgramSettings, {luckgramStorage} from '@/luckgram/core/settings';
 import luckgramAI from '@/luckgram/core/instance';
+import {onAccountLeaving} from '@/luckgram/core/logout';
 import {lgText} from '@/luckgram/text';
 import {TranslationCache} from '@/luckgram/translate/cache';
 import {TranslateError, createTranslator} from '@/luckgram/translate/service';
 import {KEY_TRANSLATE_TO, getIncomingTargetLang, getTranslateFailureText} from '@/luckgram/translate/logic';
 
 export const translationCache = new TranslationCache(luckgramStorage);
+// * this tab's account logs out: its translations and transcriptions go with it
+onAccountLeaving((account) => translationCache.clearAccount(account));
 export const getTranslateAccount = () => rootScope.myId as any as number;
 
 export const detectTextLanguage = (text: string): Promise<string | undefined> => {
