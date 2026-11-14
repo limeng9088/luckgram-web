@@ -1,4 +1,3 @@
-import {getVoiceErrorText, getVoiceRetryText, isFreeTranscribeOn, transcribeMessage} from '@/luckgram/voice/transcribe';
 import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 import {animateValue, simpleEasing} from '@helpers/animateValue';
 import createElementFromMarkup from '@helpers/createElementFromMarkup';
@@ -208,9 +207,11 @@ export function wrapRoundVideoBubble({
 
   async function showAudio() {
     // * Luckgram (W6): not Premium's — the Luckgram server transcribes it
-    const byLuckgram = isFreeTranscribeOn();
     // * read before anything is awaited: the account the tab shows then
     const {appMessagesManager} = bindManagersToSession(rootScope.managers);
+    // * loaded when asked for: it brings the downloads and the AI client with it
+    const voice = !rootScope.getPremium() ? await import('@/luckgram/voice/transcribe').catch((): undefined => undefined) : undefined;
+    const byLuckgram = !!voice?.isFreeTranscribeOn();
     if(!byLuckgram && !rootScope.getPremium()) {
       toastNew({
         langPackKey: 'AudioAndVideoTranscription.PremiumAlert',
@@ -234,7 +235,7 @@ export function wrapRoundVideoBubble({
       const fill = async() => {
         try {
           const transcribeResult = byLuckgram ?
-            {text: await transcribeMessage(message as Message.message)} :
+            {text: await voice.transcribeMessage(message as Message.message)} :
             await appMessagesManager.transcribeAudio(message, true);
           if(!transcribeResult.text) throw '';
           transcribedText.prepend(transcribeResult.text);
@@ -245,11 +246,11 @@ export function wrapRoundVideoBubble({
           }
 
           // * "转写失败 · 重试": pressed, it asks again
-          toast(getVoiceErrorText(err));
+          toast(voice.getVoiceErrorText(err));
           const retry = document.createElement('span');
           retry.classList.add('luckgram-transcribe-retry');
           retry.setAttribute('role', 'button');
-          retry.textContent = getVoiceRetryText();
+          retry.textContent = voice.getVoiceRetryText();
           retry.addEventListener('click', (e) => {
             e.stopPropagation();
             retry.remove();

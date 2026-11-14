@@ -76,6 +76,11 @@ export function getCachedTranscription(message: Message.message): string | undef
   return translationCache.getText(voiceKey(getTranslateAccount(), message.peerId, message.mid));
 }
 
+export async function getCachedTranscriptionWhenReady(message: Message.message): Promise<string | undefined> {
+  await translationCache.ready;
+  return getCachedTranscription(message);
+}
+
 /**
  * The message's voice or round video as text.
  * @throws VoiceError, whose `failure` says what to tell the user

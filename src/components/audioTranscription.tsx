@@ -12,8 +12,9 @@ import anchorCallback from '@helpers/dom/anchorCallback';
 import A11yButton from '@components/a11yButton';
 import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 import changeBubble from '@components/chat/changeBubble';
-import {translationCache} from '@/luckgram/translate';
-import {getCachedTranscription, getVoiceErrorText, getVoiceRetryText, isFreeTranscribeOn, transcribeMessage} from '@/luckgram/voice/transcribe';
+
+// * Luckgram (W6): loaded when a voice row needs it — it brings the downloads and the AI client with it
+const loadLuckgramVoice = () => import('@/luckgram/voice/transcribe');
 
 
 /**
@@ -32,8 +33,8 @@ export type TranscriptionState = {
   error: boolean,
   /** Only meaningful once `transcribed`: whether the text is showing. */
   expanded: boolean,
-  /** Luckgram (W6): its own transcription failed — the error line says so and asks again when pressed. */
-  luckgramFailed?: boolean
+  /** Luckgram (W6): its own transcription failed — the error line says this ("转写失败 · 重试") and asks again when pressed. */
+  luckgramFailed?: string
 };
 
 /** All the transcription needs of the row it belongs to: a DOM anchor carrying a live message. */
@@ -71,7 +72,7 @@ function TranscribedText(props: {id: string, state: TranscriptionState, onRetry?
     >
       <Show when={props.state.error} fallback={props.state.text}>
         <Show when={props.state.luckgramFailed} fallback={i18n('Chat.Voice.Transribe.Error')}>
-          <span class="luckgram-transcribe-retry" role="button" tabIndex={0} onClick={props.onRetry}>{getVoiceRetryText()}</span>
+          <span class="luckgram-transcribe-retry" role="button" tabIndex={0} onClick={props.onRetry}>{props.state.luckgramFailed}</span>
         </Show>
       </Show>
       <Show when={props.state.pending}>
@@ -189,21 +190,23 @@ export default function createAudioTranscription(options: {
   const runLuckgram = () => {
     const {message} = options.getRow();
     // * the text's place stays while it is asked for (again)
-    if(state.status === 'transcribed') setState({pending: true, error: false, luckgramFailed: false, text: '', expanded: true});
+    if(state.status === 'transcribed') setState({pending: true, error: false, luckgramFailed: undefined, text: '', expanded: true});
     else setState('status', 'loading');
 
-    transcribeMessage(message).then((text) => {
-      changeBubble(options.getRow(), () => setState((prev) => ({...reduceTranscribed(prev, {text}), luckgramFailed: false})));
+    loadLuckgramVoice().then((voice) => voice.transcribeMessage(message).then((text) => {
+      changeBubble(options.getRow(), () => setState((prev) => ({...reduceTranscribed(prev, {text}), luckgramFailed: undefined})));
     }, (err) => {
-      toast(getVoiceErrorText(err));
-      changeBubble(options.getRow(), () => setState({status: 'transcribed', text: '', pending: false, error: true, expanded: true, luckgramFailed: true}));
-    });
+      toast(voice.getVoiceErrorText(err));
+      changeBubble(options.getRow(), () => setState({
+        status: 'transcribed', text: '', pending: false, error: true, expanded: true, luckgramFailed: voice.getVoiceRetryText()
+      }));
+    })).catch(() => setState('status', 'idle'));
   };
 
-  translationCache.ready.then(() => {
+  loadLuckgramVoice().then(async(voice) => {
     const row = options.getRow();
-    const text = row?.message && state.status === 'idle' && getCachedTranscription(row.message);
-    if(text) changeBubble(row, () => setState((prev) => reduceTranscribed(prev, {text})));
+    const text = row?.message && await voice.getCachedTranscriptionWhenReady(row.message);
+    if(text && state.status === 'idle') changeBubble(options.getRow(), () => setState((prev) => reduceTranscribed(prev, {text})));
   }).catch(noop);
 
   const onClick = () => {
@@ -226,19 +229,17 @@ export default function createAudioTranscription(options: {
       return;
     }
 
-    if(isFreeTranscribeOn()) {
-      runLuckgram();
-      return;
-    }
-
     if(!rootScope.getPremium()) {
-      toastNew({
+      const showPremium = () => toastNew({
         langPackKey: 'AudioAndVideoTranscription.PremiumAlert',
         langPackArguments: [anchorCallback(() => {
           hideToast();
           hotReloadGuard.showPremiumPopup({feature: 'voice_to_text'});
         })]
       });
+
+      // * Luckgram (W6): with free transcription on, the Luckgram server answers instead
+      loadLuckgramVoice().then((voice) => voice.isFreeTranscribeOn() ? runLuckgram() : showPremium(), showPremium);
       return;
     }
 
