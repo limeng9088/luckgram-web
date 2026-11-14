@@ -90,7 +90,10 @@ export function brandEmbedMessages(text) {
 const HASHED_NAME = /^f[A-Za-z0-9_-]{8}\.[a-z0-9]+$/;
 const HASHED_NAME_ANYWHERE = /\bf[A-Za-z0-9_-]{8}\.[a-z0-9]+\b/g;
 
-/** A text without the hashed files' names it refers to: what is left is what somebody wrote. */
+/**
+ * A text without the hashed files' names it refers to: what is left is what somebody wrote.
+ * @param {string} text
+ */
 export function withoutHashedNames(text) {
   return text.replace(HASHED_NAME_ANYWHERE, '');
 }
