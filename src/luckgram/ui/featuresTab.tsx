@@ -23,6 +23,7 @@ import {remoteConfig} from '@/luckgram/core/remoteConfig';
 import LuckgramConnectionSection from '@/luckgram/relay/connectionSection';
 import TranslateSettingsRows from '@/luckgram/translate/settingsRows';
 import DictationSettingsRows from '@/luckgram/voice/settingsRows';
+import AssistantSettingsRows from '@/luckgram/assistant/settingsRows';
 import {LuckgramSubpageTab, useLuckgramTabTitle} from '@/luckgram/ui/tabs';
 import {lgText} from '@/luckgram/text';
 
@@ -124,7 +125,14 @@ export default function LuckgramFeaturesPage(): JSX.Element {
       <LuckgramConnectionSection />
 
       <Section name={<span>{lgText(...FEATURE_GROUP_TITLES.ai)}</span>}>
-        <For each={features('ai')}>{(feature) => <FeatureRow feature={feature} openSubpage={openSubpage} />}</For>
+        <For each={features('ai')}>{(feature) => (
+          <>
+            <FeatureRow feature={feature} openSubpage={openSubpage} />
+            <Show when={feature.key === 'ai_assistant'}>
+              <AssistantSettingsRows />
+            </Show>
+          </>
+        )}</For>
         <AiConsentRow />
       </Section>
 

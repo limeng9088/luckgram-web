@@ -87,6 +87,11 @@ export const FEATURES: LuckgramFeature[] = [
     title: ['AI 回复', 'AI reply'],
     description: ['「帮我回复」：根据对话给出三条不同语气的回复供挑选', '"Help me reply": three replies in different tones to pick from, fitting the conversation']
   },
+  {
+    key: 'ai_assistant', group: 'ai', default: true,
+    title: ['AI 助手', 'AI assistant'],
+    description: ['像聊天一样使用的 AI：提问、讲解、总结或改写长文、解题', 'An AI used like a chat: ask, explain, summarize or rewrite, solve']
+  },
 
   // ---- 调试 / Debug
   {

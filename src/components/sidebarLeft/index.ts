@@ -179,6 +179,13 @@ export class AppSidebarLeft extends SidebarSlider {
     if(!Modes.a11y) (this.inputSearch.input as HTMLInputElement).placeholder = ' ';
     const sidebarHeader = this.sidebarEl.querySelector('.item-main .sidebar-header');
     sidebarHeader.append(this.inputSearch.container);
+    // * Luckgram (W8): the AI assistant's button here, and its row over the chat list
+    import('@/luckgram/assistant/entries').then(({mountAssistantEntries}) => mountAssistantEntries({
+      header: sidebarHeader,
+      chatList: this.chatListContainer,
+      getFilterId: () => appDialogsManager.filterId,
+      createButton: (className) => ButtonIcon(className, {noRipple: true})
+    })).catch(noop);
 
     this.backBtn = this.sidebarEl.querySelector('.sidebar-back-button') as HTMLButtonElement;
     this.backBtn.setAttribute('aria-label', I18n.format('StarsRating.Back', true));

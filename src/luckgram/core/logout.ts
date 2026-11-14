@@ -67,6 +67,26 @@ export function onLuckgramLoggingOut(
   return clear(settings, storage).catch((err) => console.warn('[luckgram] log out:', (err as Error)?.message));
 }
 
+/**
+ * An account is leaving and others stay (W5, W8): when it is this tab's own account, what was kept
+ * for it alone — the assistant's conversations, its translations and transcriptions — goes with it.
+ * An account that leaves elsewhere is cleaned up as the page next starts (assistant/entries.ts).
+ * @param isOwn whether the leaving account is the one this tab shows
+ * @returns done when it is gone; never rejects
+ */
+export async function onLuckgramAccountLeaving(isOwn: boolean, account: number | string | undefined): Promise<void> {
+  if(!isOwn || !account) return;
+  try {
+    const [{deleteAssistantAccount}, {translationCache}] = await Promise.all([
+      import('@/luckgram/assistant/open'),
+      import('@/luckgram/translate')
+    ]);
+    await Promise.all([deleteAssistantAccount(account), translationCache.clearAccount(account)]);
+  } catch(err) {
+    console.warn('[luckgram] log out: the account\'s own data', (err as Error)?.message);
+  }
+}
+
 /** As the page starts: finishes a clearing that the reload cut short. */
 export function finishLuckgramLogout(settings: Clearable = LuckgramSettings, storage: KeyValue = getLocalStorage()): Promise<void> {
   try {
