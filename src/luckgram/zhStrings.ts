@@ -15,11 +15,12 @@ import settings from '@/luckgram/zh/settings';
 import chat from '@/luckgram/zh/chat';
 import callsStories from '@/luckgram/zh/callsStories';
 import communityEditors from '@/luckgram/zh/communityEditors';
+import misc from '@/luckgram/zh/misc';
 
 export type LuckgramZhTexts = {[key: string]: string | {[form: string]: string}};
 
 /** The parts, for the tests: a key belongs to one of them only. */
-export const LUCKGRAM_ZH_PARTS: {[name: string]: LuckgramZhTexts} = {settings, chat, callsStories, communityEditors};
+export const LUCKGRAM_ZH_PARTS: {[name: string]: LuckgramZhTexts} = {settings, chat, callsStories, communityEditors, misc};
 
 const zh: LuckgramZhTexts = Object.assign({}, ...Object.values(LUCKGRAM_ZH_PARTS));
 

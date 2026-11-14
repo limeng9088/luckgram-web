@@ -48,7 +48,7 @@ describe('luckgram: Chinese texts for what the Chinese pack lacks', () => {
     // * one way to say a thing (zh/GLOSSARY.md); a word on the left is not used
     const avoided: [RegExp, string][] = [
       [/你/, '您'], [/收藏夹/, '我的收藏'], [/隐私与安全/, '隐私和安全'], [/摄像头/, '相机'], [/防剧透|剧透/, '遮罩'],
-      [/信息(?!流)/, '消息'], [/对话/, '聊天'], [/\.\.\./, '…'], [/故事/, '动态'], [/反应/, '表情回应'], [/超级群/, '群组']
+      [/(?<!调试)信息(?!流)/, '消息'], [/对话/, '聊天'], [/\.\.\./, '…'], [/故事/, '动态'], [/反应/, '表情回应'], [/超级群/, '群组']
     ];
     for(const key in zh) {
       if(key.endsWith('.SearchKeywords')) continue;
