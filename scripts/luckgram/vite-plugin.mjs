@@ -6,7 +6,7 @@
  *    Actions secrets, the same pair as the phone apps) and fails without them: it never falls back
  *    to the pair upstream keeps in .env. Neither value is in the repository.
  * 2. Build information for the version line and the update check: VITE_LG_BUILD (CI run number),
- *    VITE_LG_COMMIT, VITE_LG_CHANNEL ('dev' for web-dev.luckgram.cc and previews, 'prod' for
+ *    VITE_LG_COMMIT, VITE_LG_CHANNEL ('dev' for the development site and previews, 'prod' for
  *    web.luckgram.cc, 'local' otherwise).
  * 3. index.html: the Luckgram logo in place of Telegram's on the sign-in page, and noindex on
  *    everything that is not the production address.
@@ -37,8 +37,24 @@ export function getLuckgramChannel(env = process.env) {
 }
 
 /** The values upstream's index.html template is filled with. */
+/**
+ * The address of the development site: LUCKGRAM_DEV_ORIGIN when the deployment says where it is
+ * (the workflow gives the Pages project's own address), else the one written above. It moved off
+ * luckgram.cc once (luckgram-specs#167) and may move again without a change here.
+ */
+export function getLuckgramOrigin(env = process.env) {
+  const channel = getLuckgramChannel(env);
+  const given = channel === 'dev' ? (env.LUCKGRAM_DEV_ORIGIN || '').trim() : '';
+  if(!given) return LUCKGRAM_ORIGINS[channel];
+  if(!/^https:\/\/[a-z0-9.-]+\/?$/i.test(given)) {
+    throw new Error(`[luckgram] LUCKGRAM_DEV_ORIGIN must be an https origin, got "${given}"`);
+  }
+
+  return given.replace(/\/?$/, '/');
+}
+
 export function luckgramHtmlContext(env = process.env) {
-  const origin = LUCKGRAM_ORIGINS[getLuckgramChannel(env)];
+  const origin = getLuckgramOrigin(env);
   return {
     title: 'Luckgram',
     // * says what the site is to anyone who judges it by its description (luckgram-specs#167)

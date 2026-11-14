@@ -24,7 +24,10 @@ env:
   LUCKGRAM_CHANNEL: dev
   LUCKGRAM_BUILD: ${{ github.run_number }}
   LUCKGRAM_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-  PAGES_PROJECT: luckgram-web-dev
+  # * the development site's Pages project: the repository variable LUCKGRAM_DEV_PAGES_PROJECT when it is set
+  # * (Settings → Secrets and variables → Actions → Variables), so that the site can move without a commit (specs#167)
+  PAGES_PROJECT: ${{ vars.LUCKGRAM_DEV_PAGES_PROJECT || 'luckgram-web-dev' }}
+  LUCKGRAM_DEV_ORIGIN: ${{ vars.LUCKGRAM_DEV_ORIGIN || format('https://{0}.pages.dev/', vars.LUCKGRAM_DEV_PAGES_PROJECT || 'luckgram-web-dev') }}
 
 jobs:
   build:
@@ -67,7 +70,7 @@ jobs:
           node scripts/luckgram/assemble.mjs
           node scripts/luckgram/check-site.mjs
 
-      - name: Deploy to Cloudflare Pages (luckgram-web-dev)
+      - name: Deploy to Cloudflare Pages (the development project)
         id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

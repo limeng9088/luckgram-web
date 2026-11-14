@@ -8,7 +8,7 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
 | | |
 |---|---|
 | Production | https://web.luckgram.cc (backup entrance https://lgweb.cat158.com) |
-| Development | https://web-dev.luckgram.cc — every commit of `master`, marked **DEV** |
+| Development | every commit of `master`, marked **DEV**, behind a sign-in — see [The development site](#the-development-site) |
 | Source | https://github.com/limeng9088/luckgram-web |
 
 ### Upstream
@@ -48,12 +48,39 @@ deployment. Planning and task specs: [limeng9088/luckgram-specs](https://github.
   node scripts/luckgram/check-site.mjs
   ```
 - `.github/workflows/build.yml` — every push to `master`, pull request and manual run: tests, type check,
-  build. `master` is deployed to Cloudflare Pages project `luckgram-web-dev` (https://web-dev.luckgram.cc), a
-  pull request to a preview (`https://<branch>.luckgram-web-dev.pages.dev`) that is linked in the pull request.
+  build. `master` is deployed to the development Pages project, a pull request to a preview of it
+  (`https://<branch>.<project>.pages.dev`) that is linked in the pull request.
 - `.github/workflows/release.yml` — run by hand with a commit of `master`: deploys the production address
   (Cloudflare Pages project `luckgram-web`). Nothing else deploys production.
 - The deployed page only talks to Telegram's servers and Luckgram's own domains; the
   Content-Security-Policy in `scripts/luckgram/headers.mjs` enforces it.
+
+### The development site
+
+The development site is not under `luckgram.cc`, and nobody reaches it without signing in
+(luckgram-specs#167). It is a sign-in page for Telegram accounts on a host that is not Telegram's; Google Safe
+Browsing listed `web-dev.luckgram.cc`, where it used to be, as deceptive, and a listed subdomain puts the whole
+domain at risk. So:
+
+- It lives at the Pages project's own address, `https://<project>.pages.dev`; pull request previews at
+  `https://<branch>.<project>.pages.dev`. The project is named by the repository variable
+  `LUCKGRAM_DEV_PAGES_PROJECT` (default `luckgram-web-dev`), so it can move to a new project — a new, unlisted
+  address — without a commit. `LUCKGRAM_DEV_ORIGIN` overrides the address the build writes into the page
+  (`og:url`, `canonical`) if it ever gets a domain of its own.
+- **Cloudflare Access** is in front of both the project's address and its previews: a visitor signs in (a
+  one-time code by email) before any of the site is served, so neither a crawler nor Safe Browsing sees the
+  sign-in page. Automation — tests, `curl` — sends a service token instead:
+  ```bash
+  curl -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
+       https://<project>.pages.dev/luckgram-version
+  ```
+  In a browser driven by a script, send the two headers **to this host only** (never as global extra headers:
+  they would go to Telegram and the relay as well). Once a page has loaded with them Access sets its cookie, and
+  the rest of the session — workers, the service worker, the manifest — goes by the cookie.
+- Whatever uses the site's origin has to know the new one: the dev relay (`ALLOWED_ORIGINS` of Worker
+  `luckgram-relay-dev`, see `relay/README.md`) and the dev API server (`web.allowed_origins`), each with both
+  `https://<project>.pages.dev` and `https://*.<project>.pages.dev`.
+- Production is not behind Access and does not read these variables.
 
 ### Relay
 

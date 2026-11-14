@@ -67,6 +67,7 @@ import appNavigationController from '@components/appNavigationController';
 import {preventCrossTabDynamicImportDeadlock} from '@helpers/preventDeadlock';
 import appChatBackground from '@components/chat/bubbles/chatBackground';
 import {initLuckgram} from '@/luckgram';
+import {LUCKGRAM_IS_DEV} from '@/luckgram/config';
 import {followBrowserLanguage} from '@/luckgram/language';
 
 // import commonStateStorage from '@lib/commonStateStorage';
@@ -142,6 +143,9 @@ async function checkLastActiveAccountFromTMe() {
 
 function setManifest() {
   const manifest = document.getElementById('manifest') as HTMLLinkElement;
+  // * Luckgram: the development site is behind a sign-in (Cloudflare Access, luckgram-specs#167), and a browser
+  // * asks for a manifest without cookies unless told otherwise: it would get the sign-in page instead
+  if(manifest && LUCKGRAM_IS_DEV) manifest.crossOrigin = 'use-credentials';
   if(manifest) manifest.href = `site${IS_APPLE && !IS_APPLE_MOBILE ? '_apple' : ''}.webmanifest?v=p9R6mT3xKv`;
 }
 

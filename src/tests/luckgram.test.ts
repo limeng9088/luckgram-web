@@ -51,6 +51,11 @@ describe('luckgram: the product name', () => {
     expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'prod'})).toMatchObject({title: 'Luckgram', origin: 'https://web.luckgram.cc/'});
     expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'dev'}).origin).toBe('https://web-dev.luckgram.cc/');
     expect(() => luckgramHtmlContext({LUCKGRAM_CHANNEL: 'staging'})).toThrow(/LUCKGRAM_CHANNEL/);
+
+    // * the development site says where it is itself (specs#167: it left luckgram.cc); production never does
+    expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'dev', LUCKGRAM_DEV_ORIGIN: 'https://lg-dev-x1.pages.dev'}).origin).toBe('https://lg-dev-x1.pages.dev/');
+    expect(luckgramHtmlContext({LUCKGRAM_CHANNEL: 'prod', LUCKGRAM_DEV_ORIGIN: 'https://lg-dev-x1.pages.dev/'}).origin).toBe('https://web.luckgram.cc/');
+    expect(() => luckgramHtmlContext({LUCKGRAM_CHANNEL: 'dev', LUCKGRAM_DEV_ORIGIN: 'http://example.com/path'})).toThrow(/LUCKGRAM_DEV_ORIGIN/);
   });
 });
 
