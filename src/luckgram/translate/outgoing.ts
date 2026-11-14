@@ -21,6 +21,7 @@ import getRichValueWithCaret from '@helpers/dom/getRichValueWithCaret';
 import draftTextWithEntities from '@lib/richTextProcessor/draftTextWithEntities';
 import LuckgramSettings from '@/luckgram/core/settings';
 import {isFeatureEnabled} from '@/luckgram/core/features';
+import {watchFeatures} from '@/luckgram/core/hooks';
 import {lgText} from '@/luckgram/text';
 import {
   KEY_OUT_LANGS, TRANSLATE_OUT, TranslationEntity, getOutLang, getOutgoingTargetLang, isFormattingLost, parseOutLangs, rememberOutLang
@@ -75,6 +76,9 @@ export default class LuckgramTranslateOut {
       this.translateDraft();
     });
     container.parentElement.insertBefore(this.button, container);
+    // * the switch in the settings takes effect at once, not at the next key press
+    const stop = watchFeatures([TRANSLATE_OUT], () => this.update());
+    (this.input.chat as any)?.destroyMiddlewareHelper?.get().onDestroy(stop);
     this.update();
   }
 

@@ -18,6 +18,7 @@ import {toast} from '@components/toast';
 import {attachClickEvent} from '@helpers/dom/clickEvent';
 import LuckgramSettings from '@/luckgram/core/settings';
 import {isFeatureEnabled} from '@/luckgram/core/features';
+import {watchFeatures} from '@/luckgram/core/hooks';
 import luckgramAI from '@/luckgram/core/instance';
 import {lgText} from '@/luckgram/text';
 import {
@@ -67,6 +68,9 @@ export default class LuckgramDictation {
       this.toggle();
     });
     anchor.after(this.button);
+    // * the switch in the settings takes effect at once, not at the next key press
+    const stop = watchFeatures([DICTATION], () => this.update());
+    (this.input.chat as any)?.destroyMiddlewareHelper?.get().onDestroy(stop);
     this.update();
   }
 

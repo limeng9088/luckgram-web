@@ -45,6 +45,11 @@ function FeatureRow(props: {feature: LuckgramFeature, openSubpage: (feature: Luc
   );
 }
 
+/** The last of `keys` that has a row: the settings two switches share go under it. */
+function lastOf(features: LuckgramFeature[], keys: string[]) {
+  return features.filter((feature) => keys.includes(feature.key)).pop()?.key;
+}
+
 function AiConsentRow(): JSX.Element {
   const consent = useBoolSetting(KEY_AI_CONSENT, false);
 
@@ -100,13 +105,18 @@ export default function LuckgramFeaturesPage(): JSX.Element {
       <For each={FEATURE_GROUPS.filter((group) => group !== 'ai' && group !== 'debug')}>{(group) => (
         <Show when={hasRows(group)}>
           <Section name={<span>{lgText(...FEATURE_GROUP_TITLES[group])}</span>}>
-            <For each={features(group)}>{(feature) => <FeatureRow feature={feature} openSubpage={openSubpage} />}</For>
-            <Show when={group === 'messages' && features(group).some((feature) => feature.key === 'translate_in' || feature.key === 'translate_out')}>
-              <TranslateSettingsRows />
-            </Show>
-            <Show when={group === 'messages' && features(group).some((feature) => feature.key === 'dictation')}>
-              <DictationSettingsRows />
-            </Show>
+            <For each={features(group)}>{(feature) => (
+              <>
+                <FeatureRow feature={feature} openSubpage={openSubpage} />
+                {/* a feature's own settings stand right under its switch */}
+                <Show when={feature.key === lastOf(features(group), ['translate_in', 'translate_out'])}>
+                  <TranslateSettingsRows />
+                </Show>
+                <Show when={feature.key === 'dictation'}>
+                  <DictationSettingsRows />
+                </Show>
+              </>
+            )}</For>
           </Section>
         </Show>
       )}</For>
