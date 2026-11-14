@@ -22,6 +22,7 @@ import ListenerSetter from '@helpers/listenerSetter';
 import {getMiddleware} from '@helpers/middleware';
 import draftTextWithEntities from '@lib/richTextProcessor/draftTextWithEntities';
 import {isFeatureEnabled} from '@/luckgram/core/features';
+import {watchFeatures} from '@/luckgram/core/hooks';
 import {LuckgramApiError} from '@/luckgram/core/errors';
 import {getAiErrorText} from '@/luckgram/writing/errors';
 import luckgramAI from '@/luckgram/core/instance';
@@ -139,6 +140,12 @@ export default class LuckgramAiWriting {
     });
     container.parentElement.insertBefore(this.button, container);
     registerAiWritingFeatures();
+    // * the switches in the settings take effect at once; W5's translate one too, for the narrow window's menu
+    const stop = watchFeatures([AI_WRITING, AI_REPLY, 'translate_out'], () => {
+      this.input.luckgramTranslateOut?.update();
+      this.update();
+    });
+    (this.input.chat as any)?.destroyMiddlewareHelper?.get().onDestroy(stop);
 
     // * the window got narrow or wide: W5's translate button moves into the menu or out of it
     try {
