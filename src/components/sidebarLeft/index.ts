@@ -1,5 +1,6 @@
 import {createEffect, createRoot, createSignal, createUniqueId, on} from 'solid-js';
 import appImManager from '@lib/appImManager';
+import {APP_TABS} from '@lib/appColumns';
 import rootScope from '@lib/rootScope';
 import {createSearchGroup, getSearchTransitionDuration, SearchGroup} from '@components/searchGroup';
 import crossfadeContent, {CROSS_FADE_KEYFRAMES, getAnimatedOptions} from '@helpers/dom/crossfadeContent';
@@ -185,6 +186,16 @@ export class AppSidebarLeft extends SidebarSlider {
       chatList: this.chatListContainer,
       getFilterId: () => appDialogsManager.filterId,
       createButton: (className) => ButtonIcon(className, {noRipple: true})
+    })).catch(noop);
+    // * Luckgram (W11): "管理" of the field's quick replies opens their page here
+    import('@/luckgram/replies/openManage').then(({setRepliesManagerOpener}) => setRepliesManagerOpener(async() => {
+      const {LuckgramSubpageTab} = await import('@/luckgram/ui/tabs');
+      if(mediaSizes.isMobile) appImManager.selectTab(APP_TABS.CHATLIST);
+      this.createTab(LuckgramSubpageTab).open({feature: {
+        key: 'quick_replies_manage', group: 'messages', default: true,
+        title: ['快捷回复', 'Quick replies'], description: ['', ''],
+        subpage: () => import('@/luckgram/replies/manageTab')
+      }});
     })).catch(noop);
 
     this.backBtn = this.sidebarEl.querySelector('.sidebar-back-button') as HTMLButtonElement;

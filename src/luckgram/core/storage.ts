@@ -10,7 +10,7 @@
  *   ai        the AI assistant's conversations (W8), by account; they do not expire
  */
 
-export type LuckgramStoreName = 'settings' | 'private' | 'cache' | 'ai' | 'notes';
+export type LuckgramStoreName = 'settings' | 'private' | 'cache' | 'ai' | 'notes' | 'replies';
 
 export interface LuckgramStorage {
   getAll(store: LuckgramStoreName): Promise<Record<string, any>>;
@@ -21,8 +21,8 @@ export interface LuckgramStorage {
 }
 
 const DB_NAME = 'luckgram';
-const DB_VERSION = 4; // * 2: the `cache` store (W5); 3: the `ai` store (W8); 4: the `notes` store (W10)
-const STORES: LuckgramStoreName[] = ['settings', 'private', 'cache', 'ai', 'notes'];
+const DB_VERSION = 5; // * 2: the `cache` store (W5); 3: the `ai` store (W8); 4: the `notes` store (W10); 5: the `replies` store (W11)
+const STORES: LuckgramStoreName[] = ['settings', 'private', 'cache', 'ai', 'notes', 'replies'];
 
 const promisify = <T>(request: IDBRequest<T>) => new Promise<T>((resolve, reject) => {
   request.onsuccess = () => resolve(request.result);
@@ -95,7 +95,7 @@ export class LuckgramIndexedDBStorage implements LuckgramStorage {
 
 /** Kept in memory only: the tests', and a browser that gives the page no IndexedDB (some private modes). */
 export class LuckgramMemoryStorage implements LuckgramStorage {
-  private data: Record<LuckgramStoreName, Record<string, any>> = {settings: {}, private: {}, cache: {}, ai: {}, notes: {}};
+  private data: Record<LuckgramStoreName, Record<string, any>> = {settings: {}, private: {}, cache: {}, ai: {}, notes: {}, replies: {}};
 
   public async getAll(name: LuckgramStoreName) {
     return {...this.data[name]};
@@ -115,6 +115,6 @@ export class LuckgramMemoryStorage implements LuckgramStorage {
   }
 
   public async clear() {
-    this.data = {settings: {}, private: {}, cache: {}, ai: {}, notes: {}};
+    this.data = {settings: {}, private: {}, cache: {}, ai: {}, notes: {}, replies: {}};
   }
 }
