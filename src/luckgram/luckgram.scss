@@ -736,8 +736,12 @@ body.has-auth-pages {
 }
 
 // * the chat the page is over: out of sight, so that the wallpaper is all that is behind the page
+// * `opacity` and not `visibility` alone: parts of a chat set `visibility: visible` on themselves (a
+// * message's time and ticks, the send button's icon) and showed through a hidden container
 body.luckgram-ai-open #column-center > .chats-container {
   visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 // * with no chat open, upstream shows its tips in the middle column, and their round button in the page's
