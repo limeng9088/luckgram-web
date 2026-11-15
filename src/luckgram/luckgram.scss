@@ -862,12 +862,13 @@ body.luckgram-ai-open {
   cursor: pointer;
 }
 
-// * the back arrow is for a window with one column
+// * the back arrow is for a window where the chat list is not docked beside the page: one column, or a
+// * list that floats over the middle column (upstream's chat header shows its own from the same width)
 .luckgram-ai-back {
   display: none;
   font-size: 1.5rem;
 
-  @media (max-width: 600px) {
+  @media (max-width: 925px) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1206,6 +1207,24 @@ body.luckgram-ai-open {
   cursor: pointer;
   user-select: none;
 
+  // * the list scrolls under the layer the row is in, and the layer has no colour of its own: its other
+  // * panels (the suggestion bar, the folder tabs) are opaque, its backdrop fades out towards the bottom —
+  // * where this row is, so the chats scrolled under it showed through its text. The column's colour is
+  // * laid behind the row, from edge to edge (the row's own margins included)
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 -.5rem -.25rem;
+    z-index: -1;
+    background-color: var(--surface-color);
+    pointer-events: none;
+
+    // * the folder tabs over the row end with a margin of their own: no gap for the chats to show in
+    .has-horizontal-folders & {
+      top: -.5rem;
+    }
+  }
+
   &.is-unpinned {
     display: none;
   }
@@ -1218,6 +1237,10 @@ body.luckgram-ai-open {
     margin: 0 0 .25rem;
     padding: 0;
     border-radius: 0;
+
+    &::before {
+      inset-inline: 0;
+    }
 
     .luckgram-ai-row-texts {
       display: none;
