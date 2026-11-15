@@ -71,15 +71,35 @@ export function makeTitle(text: string, max = TITLE_MAX): string {
   return line.length > max ? line.slice(0, max - 1).trimEnd() + '…' : line;
 }
 
+/** A text's length as the server counts it: in characters (code points), not in UTF-16 units — an emoji is one. */
+export function countChars(text: string | undefined): number {
+  if(!text) return 0;
+  let count = 0;
+  for(const _ of text) ++count;
+  return count;
+}
+
+/** [中文, English] of the line over the field when what is to be sent is longer than a request may be. */
+export function getTooLongText(maxChars: number): [string, string] {
+  return [`内容超过 ${maxChars} 字，请删减后再发`, `The content is over ${maxChars} characters. Please shorten it before sending`];
+}
+
 /**
  * What goes with a request: the system instruction, if the conversation has one, and its latest
  * 20 messages that are plain text and are answers or questions — not errors, not other types.
  */
-export function buildContext(conversation: Pick<Conversation, 'system' | 'messages'>, max = CONTEXT_MESSAGES): {role: 'system' | AssistantRole, content: string}[] {
+export function buildContext(
+  conversation: Pick<Conversation, 'system' | 'messages'>, max = CONTEXT_MESSAGES, maxChars = Infinity
+): {role: 'system' | AssistantRole, content: string}[] {
   const messages = conversation.messages
   .filter((message) => message.type === 'text' && !message.error && (message.text || '').trim())
   .slice(-max)
   .map((message) => ({role: message.role, content: message.text}));
+
+  // * the request as a whole has a limit of characters (the server's `ai.max_input_chars`, counted over
+  // * every message): the oldest go first, the newest — the question being asked — never
+  let total = countChars(conversation.system?.trim()) + messages.reduce((sum, message) => sum + countChars(message.content), 0);
+  while(messages.length > 1 && total > maxChars) total -= countChars(messages.shift().content);
 
   // * the first one is the user's: an answer whose question fell off the window explains nothing
   while(messages.length && messages[0].role !== 'user') messages.shift();
@@ -354,6 +374,8 @@ export const ASK_FILE_MAX_BYTES = 1024 * 1024;
 export const KEY_MAX_INPUT_CHARS = 'ai.max_input_chars';
 /** the server's own default, until its config says otherwise */
 export const DEFAULT_MAX_INPUT_CHARS = 60000;
+/** "问 AI" brings this much at least, however full the field is already (the page then says the whole is too long to send). */
+export const MIN_ASK_CHARS = 1000;
 
 const TEXT_EXTENSIONS = /\.(txt|md|markdown|csv|tsv|json|ya?ml|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|py|rb|go|rs|java|kt|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|sql|ini|toml|conf|cfg|log|tex|srt|vtt)$/i;
 const TEXT_TYPES = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|x-sh|sql|x-ndjson|toml)\b)/i;

@@ -8,7 +8,7 @@ import type {Document, Message, MessageEntity} from '@layer';
 import appDownloadManager from '@lib/appDownloadManager';
 import getMediaFromMessage from '@lib/appManagers/utils/messages/getMediaFromMessage';
 import {remoteNumber} from '@/luckgram/core/remoteConfig';
-import {DEFAULT_MAX_INPUT_CHARS, KEY_MAX_INPUT_CHARS, canReadFile, composeAsk, getAskCutText} from '@/luckgram/assistant/logic';
+import {DEFAULT_MAX_INPUT_CHARS, KEY_MAX_INPUT_CHARS, MIN_ASK_CHARS, canReadFile, composeAsk, getAskCutText} from '@/luckgram/assistant/logic';
 import {openAssistant} from '@/luckgram/assistant/open';
 import {lgText} from '@/luckgram/text';
 
@@ -39,11 +39,13 @@ export async function askAboutMessage(message: Message.message) {
 
   const page = await openAssistant();
   if(!page) return;
-  const {text, cut} = composeAsk({text: message.message, links, fileName, fileContent}, remoteNumber(KEY_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS));
+  // * what is in the field already stays, under what is brought: the room a request has is for the two
+  // * together (brought twice, the field held twice what can be sent)
+  const before = page.getInput();
+  const maxChars = remoteNumber(KEY_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS);
+  const {text, cut} = composeAsk({text: message.message, links, fileName, fileContent}, Math.max(MIN_ASK_CHARS, maxChars - before.length));
   // * said in words, in a line over the field: the "…" at the end alone does not tell that something was
   // * left out. Not a toast — upstream's takes the next press anywhere, and the next press is on the field
   const notice = getAskCutText(cut);
-  // * what was typed there before stays, under what is brought
-  const before = page.getInput();
   page.setInput(text + before, notice && lgText(...notice));
 }
