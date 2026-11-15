@@ -812,6 +812,9 @@ export default class FiltersStorage extends AppManager {
     }
 
     this.setLocalId(filter);
+    // * Luckgram: a folder of Telegram's that is new here (made on another device) takes the next place —
+    // * after the keyword folders, which got theirs before. They are given places after it again
+    const luckgramOrder = !oldFilter && !isLocalFolderId(filter.id) ? this.luckgramKeepKeywordFoldersLast() : undefined;
 
     if(!silent) {
       ++this.changesSeen;
@@ -820,6 +823,9 @@ export default class FiltersStorage extends AppManager {
       } else if(!oldFilter) {
         this.rootScope.dispatchEvent('filter_new', filter);
       }
+
+      // * after the new folder was announced: its tab is there to be put before the keyword folders'
+      if(luckgramOrder) this.rootScope.dispatchEvent('filter_order', luckgramOrder);
     }
 
     return filter;
@@ -841,6 +847,22 @@ export default class FiltersStorage extends AppManager {
   }
 
   // ---------------------------------------------------------------- Luckgram: keyword folders (specs#191)
+
+  /**
+   * The keyword folders after every folder of Telegram's: each is given a place anew, in their own order,
+   * after the last place taken. For when a folder of Telegram's got a place after theirs.
+   * @returns the order of all folders then, or nothing when no keyword folder is here
+   */
+  private luckgramKeepKeywordFoldersLast(): number[] | undefined {
+    const local = this.luckgramFolders.order.map((filterId) => this.filters[filterId]).filter(Boolean);
+    if(!local.length) return;
+    for(const filter of local) {
+      delete filter.localId;
+      this.setLocalId(filter);
+    }
+
+    return Object.values(this.filters).sort((a, b) => a.localId - b.localId).map((filter) => filter.id);
+  }
 
   /**
    * The account's keyword folders as they now are (Luckgram keeps them, and says so here as the page starts and
