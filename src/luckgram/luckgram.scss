@@ -1236,7 +1236,12 @@ body.luckgram-ai-open {
 // * the card: a layer under the chat's top bars, over the messages
 .luckgram-summary-card {
   position: absolute;
-  inset-inline: max(.5rem, calc((100% - 44rem) / 2));
+  // * as wide as upstream's own bars at the chat's top and centred as they are (`--chat-width`): on a
+  // * narrow window it reaches the column's edges, in line with the header over it
+  inset-inline: 0;
+  width: 100%;
+  max-width: var(--chat-width, 44rem);
+  margin-inline: auto;
   inset-block-start: calc(var(--chat-padding-top, 3.5rem) + .375rem);
   z-index: 4;
   display: flex;
