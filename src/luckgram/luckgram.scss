@@ -720,7 +720,9 @@ body.has-auth-pages {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--body-background-color, var(--surface-color));
+  // * no colour of its own: the chat wallpaper, which upstream draws behind the columns, shows through, as
+  // * in a chat. The chat under the page is hidden while the page is open (below)
+  background: none;
   color: var(--primary-text-color);
   font-size: var(--messages-text-size, 16px);
 
@@ -731,6 +733,11 @@ body.has-auth-pages {
   button {
     font: inherit;
   }
+}
+
+// * the chat the page is over: out of sight, so that the wallpaper is all that is behind the page
+body.luckgram-ai-open #column-center > .chats-container {
+  visibility: hidden;
 }
 
 .luckgram-ai-header {
@@ -820,9 +827,39 @@ body.has-auth-pages {
 // * the back arrow is for a window with one column
 .luckgram-ai-back {
   display: none;
+  font-size: 1.5rem;
 
   @media (max-width: 600px) {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+// * one column: the name is never cut ("Luckgra…") — the header gives up its spare room instead
+@media (max-width: 600px) {
+  .luckgram-ai-header {
+    gap: .375rem;
+    padding: 0 .375rem;
+  }
+
+  .luckgram-ai-titles {
+    flex: 1 0 auto;
+    margin-inline-start: .25rem;
+  }
+
+  .luckgram-ai-text-button {
+    padding: .375rem .375rem;
+  }
+}
+
+// * a setting that is part of the switch over it ("在聊天列表顶部显示" under "AI 助手")
+.luckgram-sub-row {
+  padding-inline-start: 2rem !important;
+
+  &.is-disabled {
+    opacity: .5;
+    pointer-events: none;
   }
 }
 
