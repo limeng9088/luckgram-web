@@ -9,6 +9,18 @@ import type AutocompleteHelperController from '@components/chat/autocompleteHelp
 import {lgText} from '@/luckgram/text';
 import {QuickReply, VISIBLE_REPLIES, getReplyPreview} from '@/luckgram/replies/logic';
 
+/** A template's row in a panel of suggestions: this helper's own, or the bot commands' (they come after the commands). */
+export function makeReplyRow(item: QuickReply, ownerDocument: Document = document) {
+  const row = ownerDocument.createElement('div');
+  row.classList.add('luckgram-replies-helper-item');
+  row.dataset.replyId = item.id;
+  row.setAttribute('role', 'option');
+  row.setAttribute('aria-selected', 'false');
+  row.dir = 'auto';
+  row.textContent = getReplyPreview(item.text);
+  return row;
+}
+
 export default class RepliesSlashHelper extends AutocompleteHelper {
   private items: QuickReply[] = [];
 
@@ -48,16 +60,7 @@ export default class RepliesSlashHelper extends AutocompleteHelper {
     }
 
     this.items = items;
-    this.list.replaceChildren(...items.map((item) => {
-      const row = this.container.ownerDocument.createElement('div');
-      row.classList.add('luckgram-replies-helper-item');
-      row.dataset.replyId = item.id;
-      row.setAttribute('role', 'option');
-      row.setAttribute('aria-selected', 'false');
-      row.dir = 'auto';
-      row.textContent = getReplyPreview(item.text);
-      return row;
-    }));
+    this.list.replaceChildren(...items.map((item) => makeReplyRow(item, this.container.ownerDocument)));
 
     this.toggle(false);
     return true;

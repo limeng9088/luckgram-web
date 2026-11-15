@@ -9,6 +9,11 @@ import getPeerActiveUsernames from '@appManagers/utils/peers/getPeerActiveUserna
 import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 
 export default class CommandsHelper extends AutocompletePeerHelper {
+  /** Luckgram (replies/controller.ts): after the commands were drawn — how many — for its rows to follow them. */
+  public luckgramAfterRender: (commands: number) => void;
+  /** Luckgram: takes the press on one of its rows; true when it was one. */
+  public luckgramPick: (target: HTMLElement) => boolean;
+
   constructor(
     appendTo: HTMLElement,
     controller: AutocompleteHelperController,
@@ -20,6 +25,8 @@ export default class CommandsHelper extends AutocompletePeerHelper {
       'commands-helper',
       (target) => {
         const targetElement = target as HTMLElement;
+        // * Luckgram (W11): a quick reply listed under the commands is put into the field, not sent as one
+        if(this.luckgramPick?.(targetElement)) return;
         const botPeerId = targetElement.dataset.peerId.toPeerId();
         let text = target.querySelector(`.${AutocompletePeerHelper.BASE_CLASS_LIST_ELEMENT}-name`).textContent;
         if(chatInput.chat.peerId.isAnyChat()) {
@@ -61,6 +68,8 @@ export default class CommandsHelper extends AutocompletePeerHelper {
 
       const filtered = processPeerFullForCommands(peerId, full, query);
       this.render(filtered, middleware);
+      // * Luckgram (W11): the quick replies the same "/…" asks for come after the commands, in this list
+      this.luckgramAfterRender?.(filtered.length);
       // console.log('found commands', found, filtered);
     });
 

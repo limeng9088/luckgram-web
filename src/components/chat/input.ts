@@ -4596,7 +4596,8 @@ export default class ChatInput {
         if(result) {
           foundHelpers.add(this.mentionsHelper);
         }
-      } else if(!foundHelpers.size && !matches[1] && firstChar === '/') { // commands
+      // * Luckgram (W11): its quick replies for the same "/…" do not keep a bot's commands from being asked for
+      } else if((!foundHelpers.size || (foundHelpers.size === 1 && foundHelpers.has(luckgramReplies))) && !matches[1] && firstChar === '/') { // commands
         if(this.commandsHelper && await this.commandsHelper.checkQuery(query, this.chat.peerId)) {
           foundHelpers.add(this.commandsHelper);
         }
