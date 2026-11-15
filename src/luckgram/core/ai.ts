@@ -22,6 +22,12 @@ import {LuckgramApiError, errorFromResponse} from '@/luckgram/core/errors';
 import {createSseParser} from '@/luckgram/core/sse';
 
 export const KEY_AI_CONSENT = 'ai_consent';
+/**
+ * How long an AI request may take to answer. A transcription and a picture answer only when the
+ * work is done (the response's headers come with the result), an answer that is written piece by
+ * piece when the model starts; the time an entry gets to be reached (10 s) cut them all short.
+ */
+export const AI_TIMEOUT_MS = 120000;
 
 export type AiTask = 'chat' | 'summary' | 'reply' | 'writing' | 'agent' | 'post' | 'translate';
 export type AiMessage = {role: 'system' | 'user' | 'assistant', content: string};
@@ -102,7 +108,8 @@ export class LuckgramAI {
         path: '/v1/ai/chat',
         json: {...options.params, task: options.task || 'chat', messages: options.messages, stream},
         accept: stream ? 'text/event-stream' : 'application/json',
-        signal: options.signal
+        signal: options.signal,
+        timeoutMs: AI_TIMEOUT_MS
       });
 
       if(!response.ok) throw errorFromResponse(response.status, await response.text().catch((): undefined => undefined));
@@ -154,7 +161,7 @@ export class LuckgramAI {
   /** A picture for the prompt. Its `url` is fetched with `fetchImage` (it needs the device's token). */
   public image(prompt: string, signal?: AbortSignal): Promise<AiImage> {
     return this.withConsent(async() => {
-      const data = await this.api.requestJSON<AiImage>({path: '/v1/ai/image', json: {prompt}, signal});
+      const data = await this.api.requestJSON<AiImage>({path: '/v1/ai/image', json: {prompt}, signal, timeoutMs: AI_TIMEOUT_MS});
       if(typeof(data?.url) !== 'string') throw new LuckgramApiError(LuckgramApiError.UPSTREAM_UNAVAILABLE);
       return {...data, url: this.api.rewriteUrl(data.url)};
     });
@@ -168,7 +175,9 @@ export class LuckgramAI {
 
       const language = options.language && /^[a-z]{2}$/i.test(options.language) ? `?language=${options.language.toLowerCase()}` : '';
       const data = await this.api.requestJSON<AiTranscription>({
-        path: '/v1/ai/transcribe' + language, body: audio, contentType: type, signal: options.signal
+        path: '/v1/ai/transcribe' + language, body: audio, contentType: type, signal: options.signal,
+        // * the server answers when the whole recording is transcribed: that takes as long as it takes
+        timeoutMs: AI_TIMEOUT_MS
       });
       if(typeof(data?.text) !== 'string') throw new LuckgramApiError(LuckgramApiError.UPSTREAM_UNAVAILABLE);
       return data;
