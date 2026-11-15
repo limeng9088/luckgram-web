@@ -143,7 +143,8 @@ export function findInterceptor<T extends {prefix: string}>(interceptors: T[], t
  * fenced code with its copy button), which knows no headings, lists or tables:
  *   - a heading becomes a bold line;
  *   - a list item keeps its mark as text ("• item", "1. item");
- *   - a table goes into a fence, where a fixed-width font keeps its columns in line.
+ *   - a table goes into a fence of its own kind (TABLE_LANGUAGE): render.ts draws it as plain lines
+ *     in a fixed-width font, which keeps its columns in line — not as a block of code.
  * Code that is already fenced is left as it is.
  */
 export function prepareMarkdown(markdown: string): string {
@@ -155,7 +156,7 @@ export function prepareMarkdown(markdown: string): string {
   const flushTable = () => {
     if(!table.length) return;
     // * a real table has its line of dashes; anything else was just text with bars
-    if(table.length >= 2 && /^\s*\|?\s*:?-{2,}/.test(table[1])) out.push('```', ...alignTable(table), '```');
+    if(table.length >= 2 && /^\s*\|?\s*:?-{2,}/.test(table[1])) out.push('```' + TABLE_LANGUAGE, ...alignTable(table), '```');
     else out.push(...table);
     table = [];
   };
@@ -200,6 +201,9 @@ export function prepareMarkdown(markdown: string): string {
   if(inFence) out.push('```');
   return out.join('\n');
 }
+
+/** The "language" of the fence a table is put in: what tells it from a block of code the model wrote. */
+export const TABLE_LANGUAGE = 'lgtable';
 
 /** The table's cells padded to their column's width; the line of dashes is drawn to match. */
 export function alignTable(rows: string[]): string[] {

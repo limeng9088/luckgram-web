@@ -1,3 +1,4 @@
+import {vi} from 'vitest';
 // * Luckgram Web (luckgram-specs#188, W8): the AI assistant — conversations, context, extension points, Markdown
 
 import 'fake-indexeddb/auto';
@@ -205,7 +206,8 @@ describe('luckgram assistant: Markdown for upstream\'s message renderer', () => 
   test('a table goes into a fence with its columns in line; bars that are no table stay as they are', () => {
     const out = prepareMarkdown('before\n| 名称 | Price |\n|---|---:|\n| 苹果 | 3 |\n| Watermelon | 12 |\nafter').split('\n');
     expect(out[0]).toBe('before');
-    expect(out[1]).toBe('```');
+    // * a fence of its own kind: render.ts draws it as plain fixed-width lines, not as a block of code
+    expect(out[1]).toBe('```lgtable');
     expect(out[out.length - 2]).toBe('```');
     expect(out[out.length - 1]).toBe('after');
     const rows = out.slice(2, -2);
@@ -274,7 +276,7 @@ describe('luckgram assistant: Markdown as text with entities', () => {
     const table = markdownToEntities('| a | b |\n|---|---|\n| 1 | 2 |');
     expect(table.entities.map((entity) => entity._)).toEqual(['messageEntityPre']);
     // * a block without a language still names one, an empty one: upstream's renderer reads it
-    expect(table.entities[0].language).toBe('');
+    expect(table.entities[0].language).toBe('lgtable');
     expect(table.text).toBe('a  | b\n-- | --\n1  | 2');
 
     const cut = markdownToEntities('look:\n```js\nconst a = 1');
@@ -296,5 +298,39 @@ describe('luckgram assistant: the row over the chat list', () => {
     expect(isPinVisible({enabled: true, pinned: true, filterId: 5})).toBe(false);
     expect(isPinVisible({enabled: true, pinned: false, filterId: 0})).toBe(false);
     expect(isPinVisible({enabled: false, pinned: true, filterId: 0})).toBe(false);
+  });
+});
+
+// * read as upstream's renderer is loaded: the test's page has no canvas to ask
+vi.mock('@environment/webpSupport', () => ({default: false}));
+
+describe('luckgram assistant: a table is drawn as its own lines, not as a block of code (specs#188)', () => {
+  test('no shell of a code block around it; a block of code the model wrote keeps its own', async() => {
+    // * upstream's renderer watches what it draws come into view: not there in the test's page
+    (globalThis as any).IntersectionObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+    const {renderMarkdown} = await import('@/luckgram/assistant/render');
+    const host = document.createElement('div');
+    host.append(renderMarkdown('对比如下：\n\n| 项目 | Price |\n|---|---|\n| 苹果 | 3 |\n| Banana | 12 |\n\n```js\nconst a = 1;\n```\n完。'));
+
+    const table = host.querySelector('pre.luckgram-ai-table');
+    expect(table).not.toBeNull();
+    expect(table.querySelector('.code-header')).toBeNull();
+    const lines = table.textContent.split('\n');
+    expect(lines.length).toBe(4);
+    expect(lines[0]).toContain('项目');
+    expect(lines[3]).toContain('Banana');
+    expect(table.textContent).not.toContain('```');
+    expect(table.textContent).not.toContain('lgtable');
+
+    // * the code is still a block of code, with its header; the table is not one of them
+    const code = host.querySelectorAll('pre.code');
+    expect(code.length).toBe(1);
+    expect(code[0].querySelector('.code-header')).not.toBeNull();
+    expect(code[0].textContent).toContain('const a = 1;');
+    expect(host.textContent).not.toContain('lgtable');
   });
 });
