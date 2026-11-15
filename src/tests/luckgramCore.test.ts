@@ -10,7 +10,7 @@ import {
   REFRESH_INTERVAL_SECONDS, deserializeRemoteConfig, getRemoteBool, getRemoteNumber, getRemoteStrings, isFeatureAllowed,
   isRemoteConfigStale, parseRemoteConfig, serializeRemoteConfig
 } from '@/luckgram/core/remoteConfigLogic';
-import {LuckgramApi} from '@/luckgram/core/api';
+import {LuckgramApi, isUsableToken} from '@/luckgram/core/api';
 import {LuckgramApiError, errorFromResponse, errorMessage} from '@/luckgram/core/errors';
 import {LuckgramAI} from '@/luckgram/core/ai';
 import {createSseParser} from '@/luckgram/core/sse';
@@ -426,6 +426,121 @@ describe('luckgram API client', () => {
     expect(calls.filter((call) => call.url.endsWith('/v1/devices')).length).toBe(1);
   });
 
+  test('two tabs opened together register one device between them', async() => {
+    // * one database, one lock manager: two tabs of a browser
+    const storage = new LuckgramMemoryStorage();
+    let tail: Promise<any> = Promise.resolve();
+    const locks = {request: <T>(_name: string, callback: () => Promise<T>) => {
+      const run = tail.then(callback);
+      tail = run.catch(() => {});
+      return run;
+    }};
+
+    let registered = 0;
+    const tokens: string[] = [];
+    const makeTab = async() => {
+      const settings = new LuckgramSettingsStore(storage, null);
+      await settings.ready;
+      const api = new LuckgramApi({endpoints: [MAIN], appVersion: '2.3', settings: settings as any, locks, fetch: (async(url: any, init: any) => {
+        if(String(url).endsWith('/v1/devices')) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return json(201, {token: 'tok-' + (++registered)});
+        }
+
+        tokens.push(init.headers['Authorization']);
+        return json(200, {ok: true});
+      }) as any});
+      return {api, settings};
+    };
+
+    const [a, b] = await Promise.all([makeTab(), makeTab()]);
+    await Promise.all([a.api.requestJSON({path: '/v1/config'}), b.api.requestJSON({path: '/v1/config'})]);
+    expect(registered).toBe(1);
+    expect(tokens).toEqual(['Bearer tok-1', 'Bearer tok-1']);
+    expect(b.settings.getPrivate('device_token')).toBe('tok-1');
+  });
+
+  test('a stored value that is no token is not sent: the browser registers again', async() => {
+    for(const bad of [{}, '', 'two words', 'line\nbreak', 42]) {
+      const {api, calls, settings} = await setup((call) =>
+        call.url.endsWith('/v1/devices') ? json(201, {token: 'tok-1'}) : json(200, {ok: true}));
+      await settings.setPrivate('device_token', bad);
+      expect(api.isRegistered).toBe(false);
+      await api.requestJSON({path: '/v1/config'});
+      expect(calls.map((call) => call.url.replace(MAIN, ''))).toEqual(['/v1/devices', '/v1/config']);
+      expect(header(calls[1], 'Authorization')).toBe('Bearer tok-1');
+      expect(settings.getPrivate('device_token')).toBe('tok-1');
+    }
+
+    // * the server's own format is not assumed: whatever token it gives is kept and sent
+    expect(isUsableToken('lgd2_' + 'A'.repeat(43))).toBe(true);
+    expect(isUsableToken('lgd9.new-format~x')).toBe(true);
+  });
+
+  describe('how long an answer may take', () => {
+    /** A server that sends its headers after `ms`, unless the request is given up before. */
+    const slow = (ms: number, response: () => Response) => (call: Call) => new Promise<Response>((resolve, reject) => {
+      const timer = setTimeout(() => resolve(response()), ms);
+      (call.init.signal as AbortSignal).addEventListener('abort', () => {
+        clearTimeout(timer);
+        reject(new DOMException('aborted', 'AbortError'));
+      });
+    });
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    test('an ordinary request: an entry silent for 10 s is given up, the next one is asked', async() => {
+      const {api, calls, settings} = await setup((call) =>
+        call.url.startsWith(MAIN) ? slow(28000, () => json(200, {from: 'main'}))(call) : json(200, {from: 'backup'}));
+      await settings.setPrivate('device_token', 'tok-1');
+      const result = api.requestJSON({path: '/v1/me'});
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(await result).toEqual({from: 'backup'});
+      // * (on the backup entry, the main one is then asked for its health: not counted here)
+      expect(calls.map((call) => call.url).filter((url) => !url.endsWith('/v1/health'))).toEqual([MAIN + '/v1/me', BACKUP + '/v1/me']);
+    });
+
+    test('a long request (a transcription): 28 s to the headers is an answer, not a failure', async() => {
+      const {api, calls, settings} = await setup(slow(28000, () => json(200, {text: '你好'})));
+      await settings.setPrivate('device_token', 'tok-1');
+      let settled = false;
+      const result = api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 55000});
+      result.then(() => settled = true, () => settled = true);
+      await vi.advanceTimersByTimeAsync(27000);
+      expect(settled).toBe(false);
+      expect((calls[0].init.signal as AbortSignal).aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await result).toEqual({text: '你好'});
+      expect(calls.length).toBe(1);
+    });
+
+    test('a long request out of time fails, and is not sent to another entry: the work may be done', async() => {
+      const {api, calls, settings} = await setup(slow(600000, () => json(200, {text: 'late'})));
+      await settings.setPrivate('device_token', 'tok-1');
+      const result = api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 55000});
+      const caught = result.catch((err) => err);
+      await vi.advanceTimersByTimeAsync(55000);
+      expect(await caught).toMatchObject({code: 'timeout'});
+      expect(calls.map((call) => call.url)).toEqual([MAIN + '/v1/ai/transcribe']);
+    });
+
+    test('a long request still moves on from an entry that cannot be reached at all', async() => {
+      const {api, calls, settings} = await setup((call) => {
+        if(call.url.startsWith(MAIN)) throw new TypeError('Failed to fetch');
+        return json(200, {text: 'ok'});
+      });
+      await settings.setPrivate('device_token', 'tok-1');
+      expect(await api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 55000})).toEqual({text: 'ok'});
+      expect(calls.filter((call) => !call.url.endsWith('/v1/health')).length).toBe(2);
+    });
+  });
+
   test('a token the server no longer knows: registers once more, then gives up', async() => {
     let token = 0;
     const {api, calls, settings} = await setup((call) => {
@@ -595,9 +710,91 @@ describe('luckgram AI client', () => {
     expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe?language=zh');
     expect(bodies[bodies.length - 1]).toBe(audio);
 
+    // * the script of a Chinese result: Simplified or Traditional, nothing else
+    await ai.transcribe(audio, {script: 'Hans'});
+    expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe?script=Hans');
+    await ai.transcribe(audio, {language: 'zh', script: 'Hant'});
+    expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe?language=zh&script=Hant');
+    await ai.transcribe(audio, {script: 'Latn' as any});
+    expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe');
+
     const before = urls.length;
     await expect(ai.transcribe(new Blob(['x'], {type: 'video/mp4'}))).rejects.toMatchObject({code: 'invalid_request'});
     expect(urls.length).toBe(before);
+  });
+
+  test('a transcription, a picture and an answer that take 28 s are waited for (specs#186: the 10 s cut them short)', async() => {
+    vi.useFakeTimers();
+    try {
+      const settings = new LuckgramSettingsStore(new LuckgramMemoryStorage(), null);
+      await settings.ready;
+      await settings.set('ai_consent', true);
+      await settings.setPrivate('device_token', 'tok');
+      const aborted: string[] = [];
+      const api = new LuckgramApi({endpoints: [MAIN, BACKUP], appVersion: '2.3', settings: settings as any, fetch: ((url: any, init: any) => new Promise((resolve, reject) => {
+        const path = String(url).replace(MAIN, '').replace(BACKUP, '');
+        const body = path.startsWith('/v1/ai/image') ? '{"url":"' + MAIN + '/v1/ai/images/1"}' : '{"text":"你好"}';
+        const timer = setTimeout(() => resolve(new Response(body, {headers: {'Content-Type': 'application/json'}})), 28000);
+        init.signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          aborted.push(path);
+          reject(new DOMException('aborted', 'AbortError'));
+        });
+      })) as any});
+      const ai = new LuckgramAI({api, askConsent: async() => true, settings: settings as any});
+
+      const results = Promise.all([
+        ai.transcribe(new Blob([new Uint8Array(10)], {type: 'audio/ogg'})),
+        ai.image('a cat'),
+        ai.chat({messages: [{role: 'user', content: 'hello'}]})
+      ]);
+      await vi.advanceTimersByTimeAsync(28000);
+      const [transcription, image, answer] = await results;
+      expect(transcription.text).toBe('你好');
+      expect(image.url).toContain('/v1/ai/images/1');
+      expect(answer).toBe('你好');
+      expect(aborted).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('"停止" while an answer is being written ends it: the request and the reading (specs#188)', async() => {
+    const settings = new LuckgramSettingsStore(new LuckgramMemoryStorage(), null);
+    await settings.ready;
+    await settings.set('ai_consent', true);
+    await settings.setPrivate('device_token', 'tok');
+
+    // * a server that keeps writing: a piece now, the next ones for as long as it is let
+    let requestSignal: AbortSignal, push: (text: string) => void;
+    const encoder = new TextEncoder();
+    const api = new LuckgramApi({endpoints: [MAIN], appVersion: '2.3', settings: settings as any, fetch: (async(_url: any, init: any) => {
+      requestSignal = init.signal;
+      return new Response(new ReadableStream({
+        start(controller) {
+          push = (text) => controller.enqueue(encoder.encode('data: ' + JSON.stringify({delta: text}) + '\n\n'));
+          push('一');
+        }
+      }), {status: 200, headers: {'Content-Type': 'text/event-stream'}});
+    }) as any});
+    const ai = new LuckgramAI({api, askConsent: async() => true, settings: settings as any});
+
+    const abort = new AbortController();
+    const seen: string[] = [];
+    const answer = ai.chat({messages: [{role: 'user', content: 'hello'}], signal: abort.signal, onDelta: (_delta, text) => seen.push(text)}).catch((err) => err);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(seen).toEqual(['一']);
+    expect(requestSignal.aborted).toBe(false);
+
+    abort.abort();
+    expect(await answer).toMatchObject({code: 'cancelled'});
+    // * the request itself is given up (the server stops being paid attention to), and what it still writes is not shown
+    expect(requestSignal.aborted).toBe(true);
+    try {
+      push('二');
+    } catch(err) {}
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(seen).toEqual(['一']);
   });
 
   test('the quota is asked without consent: nothing of the user\'s is sent', async() => {
