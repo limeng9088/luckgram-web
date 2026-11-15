@@ -2,7 +2,7 @@
 
 import {
   CITE_RULE, MAX_LINE_CHARS, MAX_MESSAGES, SummaryLine, buildMergeRequest, buildQuestionRequest, formatLine, formatLineTime, getLineText,
-  getRangeLimit, parseBullets, parseSegments, shouldOfferUnreadSummary, splitTranscript
+  getRangeLimit, parseBullets, parseSegments, shouldOfferUnreadSummary, shouldShowUnreadBar, splitTranscript, takeUnreadSnapshot
 } from '@/luckgram/summary/logic';
 
 const line = (id: number, text: string, sender = 'Anna'): SummaryLine => ({id, sender, time: '10-31 14:05', text});
@@ -180,5 +180,33 @@ describe('luckgram summary: a session', () => {
     session.cancel();
     await expect(pending).rejects.toThrow('cancelled');
     expect(signal.aborted).toBe(true);
+  });
+});
+
+describe('luckgram summary: the bar at the chat\'s top', () => {
+  test('the snapshot is what the dialog said as the chat was opened', () => {
+    expect(takeUnreadSnapshot({unread_count: 128, read_inbox_max_id: 5000})).toEqual({count: 128, readMaxId: 5000});
+    expect(takeUnreadSnapshot({unread_count: 3})).toEqual({count: 3, readMaxId: undefined});
+    expect(takeUnreadSnapshot({})).toEqual({count: 0, readMaxId: undefined});
+    expect(takeUnreadSnapshot(undefined)).toBeUndefined();
+  });
+
+  test('it is a copy: the dialog\'s count falling as messages are read does not change it', () => {
+    const dialog = {unread_count: 128, read_inbox_max_id: 5000};
+    const snapshot = takeUnreadSnapshot(dialog);
+    dialog.unread_count = 2;
+    dialog.read_inbox_max_id = 5126;
+    expect(snapshot).toEqual({count: 128, readMaxId: 5000});
+    expect(shouldShowUnreadBar({enabled: true, canOpen: true, isSaved: false, snapshot})).toBe(true);
+  });
+
+  test('shown from 30 unread up, in a chat the summary is for, never in Saved Messages or switched off', () => {
+    const state = {enabled: true, canOpen: true, isSaved: false, snapshot: {count: 30}};
+    expect(shouldShowUnreadBar(state)).toBe(true);
+    expect(shouldShowUnreadBar({...state, snapshot: {count: 29}})).toBe(false);
+    expect(shouldShowUnreadBar({...state, snapshot: undefined})).toBe(false);
+    expect(shouldShowUnreadBar({...state, isSaved: true})).toBe(false);
+    expect(shouldShowUnreadBar({...state, enabled: false})).toBe(false);
+    expect(shouldShowUnreadBar({...state, canOpen: false})).toBe(false);
   });
 });

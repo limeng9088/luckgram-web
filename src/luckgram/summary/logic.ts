@@ -158,6 +158,23 @@ export function shouldOfferUnreadSummary(unreadCount: number | undefined, thresh
   return unreadCount >= threshold;
 }
 
+/** What was unread as the chat was opened: Telegram marks messages read while they are looked at. */
+export type UnreadSnapshot = {count: number, readMaxId?: number};
+
+/** The snapshot of a chat's (or a topic's) dialog as upstream keeps it; nothing without one. */
+export function takeUnreadSnapshot(dialog: {unread_count?: number, read_inbox_max_id?: number} | undefined): UnreadSnapshot | undefined {
+  if(!dialog) return;
+  return {count: Math.max(0, dialog.unread_count || 0), readMaxId: dialog.read_inbox_max_id || undefined};
+}
+
+/**
+ * Whether the bar "N 条未读消息 · 总结聊天" stands at the chat's top: the feature is on, the chat
+ * is one the summary is for, it is not Saved Messages, and enough was unread as it was opened.
+ */
+export function shouldShowUnreadBar(state: {enabled: boolean, canOpen: boolean, isSaved: boolean, snapshot: UnreadSnapshot | undefined}) {
+  return state.enabled && state.canOpen && !state.isSaved && !!state.snapshot && shouldOfferUnreadSummary(state.snapshot.count);
+}
+
 /** How many messages a range asks for. */
 export function getRangeLimit(range: SummaryRange, unreadCount: number | undefined): number {
   if(range === 'unread') return Math.max(1, Math.min(unreadCount || 0, MAX_MESSAGES));

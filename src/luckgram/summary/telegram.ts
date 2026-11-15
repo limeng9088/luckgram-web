@@ -10,11 +10,10 @@ import type {Message} from '@layer';
 import getPeerTitle from '@components/wrappers/getPeerTitle';
 import {lgText} from '@/luckgram/text';
 import {
-  MEDIA_PLACEHOLDERS, SummaryLine, SummaryRange, formatLineTime, getLineText, getRangeLimit
+  MEDIA_PLACEHOLDERS, SummaryLine, SummaryRange, UnreadSnapshot, formatLineTime, getLineText, getRangeLimit
 } from '@/luckgram/summary/logic';
 
-/** What was unread as the chat was opened: Telegram marks messages read while they are looked at. */
-export type UnreadSnapshot = {count: number, readMaxId?: number};
+export type {UnreadSnapshot};
 
 const PAGE = 100;
 

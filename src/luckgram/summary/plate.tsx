@@ -20,9 +20,8 @@ import rootScope from '@lib/rootScope';
 import {isFeatureEnabled} from '@/luckgram/core/features';
 import {watchFeatures} from '@/luckgram/core/hooks';
 import {lgText} from '@/luckgram/text';
-import {AI_SUMMARY, shouldOfferUnreadSummary} from '@/luckgram/summary/logic';
+import {AI_SUMMARY, UnreadSnapshot, shouldShowUnreadBar, takeUnreadSnapshot} from '@/luckgram/summary/logic';
 import type SummaryCard from '@/luckgram/summary/card';
-import type {UnreadSnapshot} from '@/luckgram/summary/telegram';
 
 export type LuckgramSummaryPlate = TopbarPlateController & {
   setPeerId: (peerId: PeerId) => void,
@@ -97,15 +96,29 @@ export default function createLuckgramSummaryPlate(
     closeCard();
     setPlateHidden(true);
     setUnread();
-    if(!canOpen() || !peerId || peerId === rootScope.myId) return;
+
+    // * for looking at the bar where nothing is unread (the PR's acceptance steps): `lgSummaryBar(128)` in
+    // * the console shows it over the chat on screen as if that many were unread. Nothing is changed in
+    // * the chat or kept; leaving the chat takes it away
+    if(!chat.isPreview) {
+      (window as any).lgSummaryBar = (count = 128) => {
+        if(!canOpen()) return false;
+        setUnread({count});
+        setPlateHidden(false);
+        return true;
+      };
+    }
+
+    const isSaved = peerId === rootScope.myId;
+    if(!canOpen() || !peerId || isSaved) return;
 
     // * asked before the chat is drawn: what is read by looking at it comes after
     const {threadId} = chat;
     Promise.resolve(managers.dialogsStorage.getAnyDialog(peerId, threadId)).then((dialog: any) => {
-      if(mine !== token || !dialog) return;
-      const count: number = dialog.unread_count;
-      setUnread({count, readMaxId: dialog.read_inbox_max_id || undefined});
-      if(shouldOfferUnreadSummary(count) && isFeatureEnabled(AI_SUMMARY)) setPlateHidden(false);
+      if(mine !== token) return;
+      const snapshot = takeUnreadSnapshot(dialog);
+      setUnread(snapshot);
+      if(shouldShowUnreadBar({enabled: isFeatureEnabled(AI_SUMMARY), canOpen: canOpen(), isSaved, snapshot})) setPlateHidden(false);
     }, () => {});
   };
 
