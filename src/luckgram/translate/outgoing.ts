@@ -28,6 +28,7 @@ import {
 } from '@/luckgram/translate/logic';
 import {detectTextLanguage, getLanguageName, getTranslateErrorText, translate} from '@/luckgram/translate';
 import {getLastIncomingText} from '@/luckgram/translate/incoming';
+import {isTranslateInAiMenu} from '@/luckgram/writing/narrow';
 
 type Draft = {text: string, entities: TranslationEntity[]};
 
@@ -98,7 +99,8 @@ export default class LuckgramTranslateOut {
     }
 
     const empty = this.input.isInputEmpty();
-    const visible = this.isOn && !empty && !(this.input as any).recording;
+    // * a narrow window with AI writing: the ✦ menu has "翻译" and "翻译成…" instead (W7 需求 8)
+    const visible = this.isOn && !empty && !(this.input as any).recording && !isTranslateInAiMenu();
     this.button?.classList.toggle('hide', !visible);
 
     // * the bar goes with the text it was about
