@@ -7,6 +7,10 @@ import {AppManager} from '@appManagers/manager';
 import findAndSplice from '@helpers/array/findAndSplice';
 import assumeType from '@helpers/assumeType';
 import {FOLDER_ID_ALL, FOLDER_ID_ARCHIVE, REAL_FOLDERS, REAL_FOLDER_ID, START_LOCAL_ID} from '@appManagers/constants';
+import {LOCAL_FOLDER_ERROR, isLocalFolderId} from '@/luckgram/folders/guard';
+import {MAX_MESSAGES, splitFolderOrder} from '@/luckgram/folders/logic';
+import type {KeywordFolder} from '@/luckgram/folders/logic';
+import {KeywordFolderSet, toDialogFilter} from '@/luckgram/folders/set';
 import noop from '@helpers/noop';
 import makeError from '@helpers/makeError';
 import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
@@ -58,6 +62,13 @@ export default class FiltersStorage extends AppManager {
   private editsInFlight = 0;
   private changesSeen = 0;
   private syncAfterEdits: boolean;
+  /**
+   * Luckgram (specs#191): the account's keyword folders — folders of this device, kept among these with ids of
+   * their own range (`isLocalFolderId`). They stand after all of Telegram's, are never in the state kept by
+   * upstream, and never in a request: every place that talks to Telegram of folders leaves them out, and
+   * `apiManager.invokeApi` would stop them if one did not (luckgram/folders/guard).
+   */
+  private luckgramFolders = new KeywordFolderSet();
 
   protected after() {
     this.clear(true);
@@ -96,7 +107,8 @@ export default class FiltersStorage extends AppManager {
 
     return this.stateLoaded = this.appStateManager.getState().then((state) => {
       this.tagsEnabled = state.filtersTagsEnabled;
-      const filtersArr = this.prependFilters(state.filtersArr);
+      // * Luckgram: a keyword folder is never kept there; one found is not taken for Telegram's
+      const filtersArr = this.prependFilters((state.filtersArr || []).filter((filter) => !isLocalFolderId((filter as MyDialogFilter).id)));
       filtersArr.map((filter) => {
         this.saveDialogFilter(filter, false, true);
       });
@@ -198,6 +210,8 @@ export default class FiltersStorage extends AppManager {
     return this.getDialogFilters(true, fetched).then((filters) => {
       for(const _filterId in oldFilters) {
         const filterId = +_filterId;
+        // * Luckgram: a keyword folder is no folder of the server's to be missing from its answer
+        if(isLocalFolderId(filterId)) continue;
         if(!filters.find((filter) => filter.id === filterId)) { // * deleted
           this.onUpdateDialogFilter({_: 'updateDialogFilter', id: filterId});
         }
@@ -213,15 +227,19 @@ export default class FiltersStorage extends AppManager {
 
     // * an order naming a folder this client does not have (an updateDialogFilter missed - it has no pts) is
     // * not this client's list any more: the folders are asked for again, as tdesktop does (applyOrder -> load)
-    if(update.order.some((filterId) => !this.filters[filterId])) {
+    // * Luckgram: the order is of Telegram's folders; the keyword folders follow them, in their own order
+    const luckgramOrder = splitFolderOrder(update.order, this.luckgramFolders.order.filter((filterId) => !!this.filters[filterId]));
+    if(luckgramOrder.cloud.some((filterId) => !this.filters[filterId])) {
       this.onUpdateDialogFilters({_: 'updateDialogFilters'});
       return;
     }
 
-    const order = update.order.slice();
+    const order = luckgramOrder.cloud;
     if(!order.includes(FOLDER_ID_ARCHIVE)) {
       order.splice(order[0] === FOLDER_ID_ALL ? 1 : 0, 0, FOLDER_ID_ARCHIVE);
     }
+
+    order.push(...luckgramOrder.local);
 
     this.localId = START_LOCAL_ID;
     order.forEach((filterId) => {
@@ -236,7 +254,8 @@ export default class FiltersStorage extends AppManager {
   };
 
   private pushToState() {
-    this.appStateManager.pushToState('filtersArr', this.filtersArr);
+    // * Luckgram: keyword folders are kept by Luckgram, not here
+    this.appStateManager.pushToState('filtersArr', this.filtersArr.filter((filter) => !isLocalFolderId(filter.id)));
   }
 
   public testDialogForFilter(dialog: AnyDialog, filter?: MyDialogFilter) {
@@ -245,6 +264,11 @@ export default class FiltersStorage extends AppManager {
     }
 
     const {peerId} = dialog;
+
+    // * Luckgram: a keyword folder holds the chats whose latest messages have one of its keywords
+    if(isLocalFolderId(filter.id)) {
+      return this.luckgramTestDialog(dialog as Dialog, filter.id);
+    }
 
     if(REAL_FOLDERS.has(filter.id)) {
       return dialog.folder_id === filter.id && this.dialogsStorage.canSaveDialog(peerId, dialog);
@@ -356,6 +380,11 @@ export default class FiltersStorage extends AppManager {
    * for the round trip - and goes back where it was if the folder does not take the edit.
    */
   private setFilterPinnedPeers(filter: MyDialogFilter, peerIds: PeerId[]) {
+    // * Luckgram: a keyword folder has no pins — they would be an edit of a folder Telegram does not have
+    if(isLocalFolderId(filter.id)) {
+      return Promise.reject(makeError(LOCAL_FOLDER_ERROR as any));
+    }
+
     const previous = filter.pinnedPeerIds.slice();
     const inputPeers = new Map(filter.pinnedPeerIds.map((peerId, idx) => [peerId, filter.pinned_peers[idx]]));
 
@@ -426,13 +455,20 @@ export default class FiltersStorage extends AppManager {
   }
 
   public createDialogFilter(filter: MyDialogFilter, prepend?: boolean) {
-    const maxId = Math.max(1, ...Object.keys(this.filters).map((i) => +i));
+    // * Luckgram: among Telegram's ids alone
+    const maxId = Math.max(1, ...Object.keys(this.filters).map((i) => +i).filter((i) => !isLocalFolderId(i)));
     filter = copy(filter);
     filter.id = maxId + 1;
     return this.updateDialogFilter(filter, undefined, prepend);
   }
 
   public updateDialogFilter(filter: MyDialogFilter, remove = false, prepend = false) {
+    // * Luckgram: a keyword folder is changed and removed through `luckgramSetKeywordFolders`, never here
+    if(isLocalFolderId(filter?.id)) {
+      console.warn('[luckgram] keyword folder: an edit meant for Telegram was not sent', filter.id);
+      return Promise.reject(makeError(LOCAL_FOLDER_ERROR as any));
+    }
+
     return this.trackEdit(this.apiManager.invokeApi('messages.updateDialogFilter', {
       id: filter.id,
       filter: remove ? undefined : this.getOutputDialogFilter(filter)
@@ -459,6 +495,8 @@ export default class FiltersStorage extends AppManager {
   }
 
   public updateDialogFiltersOrder(order: number[]) {
+    // * Luckgram: Telegram is told of its own folders alone
+    order = order.filter((filterId) => !isLocalFolderId(filterId));
     return this.trackEdit(this.apiManager.invokeApi('messages.updateDialogFiltersOrder', {
       order
     }).then(() => {
@@ -596,7 +634,8 @@ export default class FiltersStorage extends AppManager {
   }
 
   public async getDialogFilters(overwrite = false, fetched?: MessagesDialogFilters): Promise<MyDialogFilter[]> {
-    if(Object.keys(this.filters).length > PREPENDED_FILTERS && !overwrite) {
+    // * Luckgram: keyword folders do not count as folders had from the server
+    if(Object.keys(this.filters).filter((filterId) => !isLocalFolderId(+filterId)).length > PREPENDED_FILTERS && !overwrite) {
       return this.getKeptFilters();
     }
 
@@ -670,7 +709,8 @@ export default class FiltersStorage extends AppManager {
 
   /** Whether the kept folders are the server's ones, in its order: what an edit would send would say the same */
   private isKeptAsServer(serverFilters: DialogFilter[]) {
-    const keptIds = this.getOrderedFilterIds();
+    // * Luckgram: the server has no keyword folders to compare with
+    const keptIds = this.getOrderedFilterIds().filter((filterId) => !isLocalFolderId(filterId));
     indexOfAndSplice(keptIds, FOLDER_ID_ARCHIVE);
     const serverIds = serverFilters.map((filter) => filter._ === 'dialogFilterDefault' ? FOLDER_ID_ALL : filter.id);
     if(!serverIds.includes(FOLDER_ID_ALL)) {
@@ -788,10 +828,111 @@ export default class FiltersStorage extends AppManager {
       }
     } else {
       filter.localId = this.localId++ as MyDialogFilter['localId'];
+      // * Luckgram: a keyword folder has its place, and is not among the folders the state keeps
+      if(isLocalFolderId(filter.id)) return;
       findAndSplice(this.filtersArr, (_filter) => _filter.id === filter.id);
       this.filtersArr.push(filter);
       this.pushToState();
     }
+  }
+
+  // ---------------------------------------------------------------- Luckgram: keyword folders (specs#191)
+
+  /**
+   * The account's keyword folders as they now are (Luckgram keeps them, and says so here as the page starts and
+   * whenever they change; an empty list takes them all away). They are put among the folders after Telegram's,
+   * and the chat list hears of them as of any folder.
+   */
+  public luckgramSetKeywordFolders(folders: KeywordFolder[]) {
+    const diff = this.luckgramFolders.set(folders || []);
+    // * one that is known but not among the folders any more (they were all cleared) is put back
+    for(const folder of this.luckgramFolders.all) {
+      if(!this.filters[folder.id] && !diff.added.includes(folder)) diff.added.push(folder);
+    }
+
+    for(const filterId of diff.removed) {
+      const filter = this.filters[filterId];
+      if(!filter) continue;
+      this.rootScope.dispatchEvent('filter_delete', filter);
+      delete this.filters[filterId];
+    }
+
+    for(const folder of diff.changed) {
+      const filter = this.filters[folder.id];
+      if(!filter) {
+        diff.added.push(folder);
+        continue;
+      }
+
+      const {title, luckgramKeywords} = toDialogFilter(folder);
+      Object.assign(filter, {title, luckgramKeywords});
+      this.rootScope.dispatchEvent('filter_update', filter);
+    }
+
+    for(const folder of diff.added) {
+      const filter: MyDialogFilter = toDialogFilter(folder);
+      this.filters[filter.id] = filter;
+      this.setLocalId(filter);
+      this.rootScope.dispatchEvent('filter_new', filter);
+    }
+
+    // * their places: after Telegram's folders, in the order given
+    if(diff.added.length || diff.removed.length || diff.orderChanged) {
+      this.luckgramPlaceFolders();
+    }
+
+    return this.luckgramFolders.order;
+  }
+
+  /** Every folder numbered anew: Telegram's as they stand, the keyword folders after them. */
+  private luckgramPlaceFolders() {
+    const cloud = this.getOrderedFilterIds().filter((filterId) => !isLocalFolderId(filterId));
+    const order = [...cloud, ...this.luckgramFolders.order.filter((filterId) => !!this.filters[filterId])];
+    this.localId = START_LOCAL_ID;
+    order.forEach((filterId) => {
+      const filter = this.filters[filterId];
+      delete filter.localId;
+      this.setLocalId(filter);
+    });
+
+    this.rootScope.dispatchEvent('filter_order', order);
+  }
+
+  private luckgramTestDialog(dialog: Dialog, filterId: number) {
+    const {peerId} = dialog;
+    if(!this.appMessagesManager.getDialogOnly(peerId)) {
+      return false;
+    }
+
+    return this.luckgramFolders.test(filterId, {
+      peerId,
+      kind: (peerId as number) > 0 ? 'private' : this.appPeersManager.isBroadcast(peerId) ? 'channel' : 'group',
+      archived: dialog.folder_id === FOLDER_ID_ARCHIVE,
+      top: dialog.top_message,
+      getTexts: () => this.luckgramGetTexts(peerId, dialog.top_message)
+    });
+  }
+
+  /** The chat's latest message and those of its messages that are kept here, the latest first: nothing is asked of the server. */
+  private luckgramGetTexts(peerId: PeerId, topMessage: number) {
+    const mids = new Set<number>(topMessage ? [topMessage] : []);
+    try {
+      const first = this.appMessagesManager.getHistoryStorage(peerId)?.history?.first;
+      for(const mid of first || []) {
+        if(mids.size >= MAX_MESSAGES) break;
+        mids.add(mid as number);
+      }
+    } catch(err) {}
+
+    return [...mids].sort((a, b) => b - a).map((mid) => {
+      const message = this.appMessagesManager.getMessageByPeer(peerId, mid) as any;
+      return message?._ === 'message' ? message.message as string : undefined;
+    });
+  }
+
+  /** What the keyword folder found in the chat: the keyword, for the chat list and the chat (W12b). */
+  public luckgramGetKeywordHit(filterId: number, peerId: PeerId) {
+    return this.luckgramFolders.getHit(filterId, peerId);
   }
 
   public async isFilterIdAvailable(filterId: number): Promise<boolean | undefined> {
