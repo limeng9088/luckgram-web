@@ -13,6 +13,8 @@ export type SummaryRange = 'unread' | typeof RANGES[number];
 export const MAX_MESSAGES = 500;
 /** A line longer than this is cut, so that one long message cannot take a whole part. */
 export const MAX_LINE_CHARS = 2000;
+/** A question about the summarized messages is no longer than this (the field takes no more). */
+export const MAX_QUESTION_CHARS = 2000;
 /** remote config: how long a request's text may be (the server's default) */
 export const KEY_MAX_INPUT_CHARS = 'ai.max_input_chars';
 export const DEFAULT_MAX_INPUT_CHARS = 60000;
@@ -28,7 +30,9 @@ export type SummaryLine = {
 };
 
 /** How references must look; added to every request (the server's prompt does not ask for them). */
-export const CITE_RULE = 'After each point, cite the message IDs it is based on, like [#123] or [#123, #456]. Use only IDs that appear in the messages.';
+export const CITE_RULE = 'After each point, cite the IDs of the messages it is based on. Write every ID on its own in square brackets with a hash, exactly like [#123]; ' +
+  'for several messages write them one after another, like [#123][#456]. Never put two IDs into one pair of brackets, and never use other brackets. ' +
+  'Use only IDs that appear in the messages.';
 
 export function formatLine(line: SummaryLine): string {
   let text = `[#${line.id}] ${line.sender} (${line.time}): ${(line.text || '').replace(/\s*\n\s*/g, ' ').trim()}`;
@@ -98,7 +102,11 @@ export function buildQuestionRequest(lines: SummaryLine[], question: string, max
 /** A piece of an answer: plain text, or a reference to a message. */
 export type SummarySegment = {text: string} | {messageId: number};
 
-const CITATION = /[[（(]\s*#?\d+(?:\s*[,，、]\s*#?\d+)*\s*[\]）)]/g;
+// * what a model writes for references, however it was asked: one id or several in a pair of brackets
+// * — square, round, lenticular 【】, tortoise-shell 〔〕, half or full width — with or without "#",
+// * the ids apart by commas (, ， 、 ; ；) or spaces
+const CITATION = /[[［【〔（(]\s*[#＃]?\d+(?:(?:\s*[,，、;；]\s*|\s+)[#＃]?\d+)*\s*[\]］】〕）)]/g;
+const SQUARE_OPENING = /^[[［【〔]/;
 
 /**
  * The text cut into plain text and references. A reference to an id that is not in the range is
@@ -113,12 +121,13 @@ export function parseSegments(text: string | undefined, validIds: {has: (id: num
   let match: RegExpExecArray;
   while((match = CITATION.exec(text))) {
     const token = match[0];
+    const hasHash = /[#＃]/.test(token);
     // * "(2024)" in a sentence is not a reference
-    if(!token.includes('#') && !token.startsWith('[')) continue;
+    if(!hasHash && !SQUARE_OPENING.test(token)) continue;
 
     const ids = [...new Set((token.match(/\d+/g) || []).map(Number))].filter((id) => validIds.has(id));
     // * "[1]" that is none of the ids: left as text
-    if(!ids.length && !token.includes('#')) continue;
+    if(!ids.length && !hasHash) continue;
 
     const before = text.slice(last, match.index).replace(/ +$/, '');
     if(before) out.push({text: before});
@@ -128,6 +137,14 @@ export function parseSegments(text: string | undefined, validIds: {has: (id: num
 
   if(last < text.length) out.push({text: text.slice(last)});
   return out;
+}
+
+/** A reference's place in a text that goes through the Markdown renderer: characters no text has, the id between them. */
+export const REFERENCE_MARK = /\uE000(\d+)\uE001/g;
+
+/** The text with each reference as a mark (REFERENCE_MARK) the renderer leaves alone, to be drawn as a button after it. */
+export function markReferences(text: string | undefined, validIds: {has: (id: number) => boolean}): string {
+  return parseSegments(text, validIds).map((segment) => 'text' in segment ? segment.text : `\uE000${segment.messageId}\uE001`).join('');
 }
 
 /** The points of a summary, without their "- " / "• " / "1. " marks; a line without one continues the point before. */

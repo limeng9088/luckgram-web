@@ -71,15 +71,35 @@ export function makeTitle(text: string, max = TITLE_MAX): string {
   return line.length > max ? line.slice(0, max - 1).trimEnd() + '…' : line;
 }
 
+/** A text's length as the server counts it: in characters (code points), not in UTF-16 units — an emoji is one. */
+export function countChars(text: string | undefined): number {
+  if(!text) return 0;
+  let count = 0;
+  for(const _ of text) ++count;
+  return count;
+}
+
+/** [中文, English] of the line over the field when what is to be sent is longer than a request may be. */
+export function getTooLongText(maxChars: number): [string, string] {
+  return [`内容超过 ${maxChars} 字，请删减后再发`, `The content is over ${maxChars} characters. Please shorten it before sending`];
+}
+
 /**
  * What goes with a request: the system instruction, if the conversation has one, and its latest
  * 20 messages that are plain text and are answers or questions — not errors, not other types.
  */
-export function buildContext(conversation: Pick<Conversation, 'system' | 'messages'>, max = CONTEXT_MESSAGES): {role: 'system' | AssistantRole, content: string}[] {
+export function buildContext(
+  conversation: Pick<Conversation, 'system' | 'messages'>, max = CONTEXT_MESSAGES, maxChars = Infinity
+): {role: 'system' | AssistantRole, content: string}[] {
   const messages = conversation.messages
   .filter((message) => message.type === 'text' && !message.error && (message.text || '').trim())
   .slice(-max)
   .map((message) => ({role: message.role, content: message.text}));
+
+  // * the request as a whole has a limit of characters (the server's `ai.max_input_chars`, counted over
+  // * every message): the oldest go first, the newest — the question being asked — never
+  let total = countChars(conversation.system?.trim()) + messages.reduce((sum, message) => sum + countChars(message.content), 0);
+  while(messages.length > 1 && total > maxChars) total -= countChars(messages.shift().content);
 
   // * the first one is the user's: an answer whose question fell off the window explains nothing
   while(messages.length && messages[0].role !== 'user') messages.shift();
@@ -143,7 +163,8 @@ export function findInterceptor<T extends {prefix: string}>(interceptors: T[], t
  * fenced code with its copy button), which knows no headings, lists or tables:
  *   - a heading becomes a bold line;
  *   - a list item keeps its mark as text ("• item", "1. item");
- *   - a table goes into a fence, where a fixed-width font keeps its columns in line.
+ *   - a table goes into a fence of its own kind (TABLE_LANGUAGE): render.ts draws it as plain lines
+ *     in a fixed-width font, which keeps its columns in line — not as a block of code.
  * Code that is already fenced is left as it is.
  */
 export function prepareMarkdown(markdown: string): string {
@@ -155,7 +176,7 @@ export function prepareMarkdown(markdown: string): string {
   const flushTable = () => {
     if(!table.length) return;
     // * a real table has its line of dashes; anything else was just text with bars
-    if(table.length >= 2 && /^\s*\|?\s*:?-{2,}/.test(table[1])) out.push('```', ...alignTable(table), '```');
+    if(table.length >= 2 && /^\s*\|?\s*:?-{2,}/.test(table[1])) out.push('```' + TABLE_LANGUAGE, ...alignTable(table), '```');
     else out.push(...table);
     table = [];
   };
@@ -200,6 +221,9 @@ export function prepareMarkdown(markdown: string): string {
   if(inFence) out.push('```');
   return out.join('\n');
 }
+
+/** The "language" of the fence a table is put in: what tells it from a block of code the model wrote. */
+export const TABLE_LANGUAGE = 'lgtable';
 
 /** The table's cells padded to their column's width; the line of dashes is drawn to match. */
 export function alignTable(rows: string[]): string[] {
@@ -350,6 +374,8 @@ export const ASK_FILE_MAX_BYTES = 1024 * 1024;
 export const KEY_MAX_INPUT_CHARS = 'ai.max_input_chars';
 /** the server's own default, until its config says otherwise */
 export const DEFAULT_MAX_INPUT_CHARS = 60000;
+/** "问 AI" brings this much at least, however full the field is already (the page then says the whole is too long to send). */
+export const MIN_ASK_CHARS = 1000;
 
 const TEXT_EXTENSIONS = /\.(txt|md|markdown|csv|tsv|json|ya?ml|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|py|rb|go|rs|java|kt|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|sql|ini|toml|conf|cfg|log|tex|srt|vtt)$/i;
 const TEXT_TYPES = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|x-sh|sql|x-ndjson|toml)\b)/i;
@@ -368,7 +394,34 @@ export function canReadFile(mimeType: string | undefined, fileName: string | und
  * names, the file's name and — for a text file — its content. Ends with an empty line: the user
  * writes the question under it. Cut to what a request may carry, the file's content first.
  */
-export function composeAskText(parts: {text?: string, links?: string[], fileName?: string, fileContent?: string}, maxChars = DEFAULT_MAX_INPUT_CHARS): string {
+export function composeAskText(parts: AskParts, maxChars = DEFAULT_MAX_INPUT_CHARS): string {
+  return composeAsk(parts, maxChars).text;
+}
+
+export type AskParts = {text?: string, links?: string[], fileName?: string, fileContent?: string};
+
+/**
+ * What was left out of what "问 AI" brought, for the user to be told (the "…" alone does not say):
+ * `kept` characters of the file's content, or of the whole, are there; `fileLeftOut` — there was
+ * no room for the file's content at all, its name alone went.
+ */
+export type AskCut = {kept?: number, of?: 'file' | 'all', fileLeftOut?: boolean};
+
+/** [中文, English] of the notice for a cut; nothing when nothing was cut. */
+export function getAskCutText(cut: AskCut | undefined): [string, string] | undefined {
+  if(!cut) return;
+  if(cut.kept) {
+    return cut.of === 'file' ?
+      [`文件内容较长，已截取前 ${cut.kept} 字`, `The file is long: its first ${cut.kept} characters were taken`] :
+      [`内容较长，已截取前 ${cut.kept} 字`, `The content is long: its first ${cut.kept} characters were taken`];
+  }
+
+  if(cut.fileLeftOut) return ['内容较长，没有带上文件内容', 'The content is long: the file\'s content was left out'];
+}
+
+/** composeAskText, with what was cut. */
+export function composeAsk(parts: AskParts, maxChars = DEFAULT_MAX_INPUT_CHARS): {text: string, cut?: AskCut} {
+  let cut: AskCut;
   const text = (parts.text || '').trim();
   const links = [...new Set((parts.links || []).filter((link) => link && !text.includes(link)))];
   const blocks: string[] = [];
@@ -381,12 +434,20 @@ export function composeAskText(parts: {text?: string, links?: string[], fileName
     if(content) {
       // * room for the rest and for the question itself
       const room = maxChars - blocks.join('\n\n').length - block.length - 200;
-      if(room > 200) block += '\n' + (content.length > room ? content.slice(0, room) + '\n…' : content);
+      if(room > 200) {
+        if(content.length > room) cut = {kept: room, of: 'file'};
+        block += '\n' + (content.length > room ? content.slice(0, room) + '\n…' : content);
+      } else {
+        cut = {fileLeftOut: true};
+      }
     }
 
     blocks.push(block);
   }
 
   const out = blocks.join('\n\n');
-  return out ? (out.length > maxChars ? out.slice(0, maxChars - 1) + '…' : out) + '\n\n' : '';
+  if(!out) return {text: ''};
+  // * the whole is cut: that is what there is to say, whatever was said of the file
+  if(out.length > maxChars) return {text: out.slice(0, maxChars - 1) + '…\n\n', cut: {kept: maxChars - 1, of: 'all'}};
+  return {text: out + '\n\n', cut};
 }

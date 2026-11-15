@@ -21,7 +21,8 @@ export type AssistantPageApi = {
   /** the conversation that is open */
   getConversation: () => Conversation,
   getInput: () => string,
-  setInput: (text: string) => void,
+  /** @param notice a line shown over the field until the user edits the text or sends it (what was left out of what was brought) */
+  setInput: (text: string, notice?: string) => void,
   /** Adds a message to the open conversation and shows it. @returns its id */
   addMessage: (message: Pick<AssistantMessage, 'role' | 'type' | 'text'> & {data?: any, partial?: boolean}) => string,
   /** Changes a message that is there (a result arrived, an error) and draws it again. */

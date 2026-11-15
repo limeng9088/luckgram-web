@@ -19,7 +19,8 @@ import {luckgramStorage} from '@/luckgram/core/settings';
 import {isFeatureEnabled} from '@/luckgram/core/features';
 import luckgramAI from '@/luckgram/core/instance';
 import {lgText} from '@/luckgram/text';
-import {AI_ASSISTANT, AI_HASH} from '@/luckgram/assistant/logic';
+import {remoteNumber} from '@/luckgram/core/remoteConfig';
+import {AI_ASSISTANT, AI_HASH, DEFAULT_MAX_INPUT_CHARS, KEY_MAX_INPUT_CHARS} from '@/luckgram/assistant/logic';
 import AssistantPage from '@/luckgram/assistant/page';
 import type {AssistantPageApi} from '@/luckgram/assistant/registry';
 import {AssistantStore} from '@/luckgram/assistant/store';
@@ -29,8 +30,21 @@ export const assistantStore = new AssistantStore(luckgramStorage);
 let page: AssistantPage;
 let navigationItem: NavigationItem;
 let listening = false;
-/** a narrow window showed the chat list as the page was opened: Back goes there, whatever chat is under the page */
-let cameFromList = false;
+
+/**
+ * Whether the chat list is not a column of its own beside the page: a window of one column
+ * (600px and less), or one where the list floats over the middle column (up to 925px —
+ * upstream's $floating-left-sidebar). There the list and the page are not seen together: the page
+ * is brought forward as it opens, and going back from it shows the list — always the list,
+ * whatever chat was open before (upstream's own back button of a chat does the same at these widths).
+ */
+function isListFloating() {
+  try {
+    return !window.matchMedia('(min-width: 926px)').matches;
+  } catch(err) {
+    return mediaSizes.isMobile;
+  }
+}
 /** what was typed and not sent as the page was closed (opening a chat closes it): there again when it is opened */
 let draft: {account: PeerId, text: string};
 
@@ -49,12 +63,26 @@ function listenOnce() {
   document.getElementById('folders-container')?.addEventListener('click', () => {
     if(page) closeAssistant({keepColumn: true});
   }, true);
+
+  // * the window got narrow with the page open: one column is on screen now, and upstream leaves there
+  // * the one it had marked as active — the chat list, when no chat was open under the page, with the
+  // * page off screen beside it. The page's column is brought on screen, as when it is opened narrow
+  mediaSizes.addEventListener('changeScreen', () => {
+    if(!page || !isListFloating()) return;
+    if(document.body.classList.contains(LEFT_COLUMN_ACTIVE_CLASSNAME)) appImManager.selectTab(APP_TABS.CHAT);
+  });
 }
 
 /** Opens the assistant's page, or brings the open one forward. Nothing when the feature is off or held back. */
 export async function openAssistant(): Promise<AssistantPageApi | undefined> {
   if(!isFeatureEnabled(AI_ASSISTANT) || !rootScope.myId) return;
   if(page) {
+    // * pressed in a list that floats over the page (or is the one column): the page comes forward
+    if(isListFloating() && document.body.classList.contains(LEFT_COLUMN_ACTIVE_CLASSNAME)) {
+      appImManager.selectTab(APP_TABS.CHAT);
+      appNavigationController.overrideHash(AI_HASH.slice(1), true);
+    }
+
     page.focus();
     return page.api;
   }
@@ -67,6 +95,7 @@ export async function openAssistant(): Promise<AssistantPageApi | undefined> {
     account: rootScope.myId as any,
     store: assistantStore,
     chat: (options) => luckgramAI.chat(options),
+    maxInputChars: () => remoteNumber(KEY_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS),
     onBack: () => closeAssistant(),
     copy: (text) => {
       copyTextToClipboard(text);
@@ -81,12 +110,11 @@ export async function openAssistant(): Promise<AssistantPageApi | undefined> {
   if(draft?.account === rootScope.myId && draft.text) page.api.setInput(draft.text);
   draft = undefined;
 
-  cameFromList = mediaSizes.isMobile && document.body.classList.contains(LEFT_COLUMN_ACTIVE_CLASSNAME);
   appImManager.columnEl.append(page.element);
   document.body.classList.add('luckgram-ai-open');
 
-  // * one column on screen: it has to be the middle one
-  if(mediaSizes.isMobile) appImManager.selectTab(APP_TABS.CHAT);
+  // * the list is not beside the page (one column, or a list that floats over it): the page comes forward
+  if(isListFloating()) appImManager.selectTab(APP_TABS.CHAT);
   // * after the column was chosen, which writes the address of the chat under the page
   appNavigationController.overrideHash(AI_HASH.slice(1), true);
 
@@ -120,10 +148,10 @@ export function closeAssistant(options: {keepColumn?: boolean} = {}) {
 
   if(options.keepColumn) return;
 
-  const openPeerId = appImManager.chat?.peerId;
-  // * a narrow window goes back where it came from: to the list, when the page was opened from it (a chat
-  // * opened before is still under the page) or there is no chat; the chat's own address otherwise
-  if(mediaSizes.isMobile && (cameFromList || !openPeerId)) appImManager.selectTab(APP_TABS.CHATLIST);
+  // * back from the page is back to the chat list, wherever the page was opened from and whatever chat
+  // * is under it: shown as the one column, or floating over the middle one. With the list docked
+  // * beside the page there is nothing to go back to — it is there
+  if(isListFloating()) appImManager.selectTab(APP_TABS.CHATLIST);
   if(location.hash === AI_HASH) appNavigationController.overrideHash('', true);
 }
 

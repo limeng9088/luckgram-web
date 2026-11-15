@@ -450,6 +450,7 @@ export default class ChatInput {
   public luckgramDictation: LuckgramDictation;
   // * Luckgram (W7): the ✦ button — AI writing, AI reply
   public luckgramAiWriting: LuckgramAiWriting;
+  private luckgramExtraHeight = 0;
   // * Luckgram (W11): templates put into the field with one press; "/…" finds them
   public luckgramQuickReplies: LuckgramQuickReplies;
   // * Luckgram (W12): a chat opened from a keyword folder goes from one message with a keyword to the next
@@ -3895,7 +3896,16 @@ export default class ChatInput {
     const helperPx = this.helperVisible ? 48 : 0;
     const collapsedHeight = Math.max(baseHeight, this.messageInputNaturalHeight + 8) + helperPx;
     this.chatInput?.style.setProperty('--message-input-collapsed-height', `${collapsedHeight}px`);
-    this.chat.updateChatInputHeight(collapsedHeight - baseHeight);
+    // * Luckgram: what it puts over the field (the AI panel, its bars) takes room from the messages too
+    this.chat.updateChatInputHeight(collapsedHeight - baseHeight + this.luckgramExtraHeight);
+  }
+
+  /** Luckgram (core/inputRoom.ts): how tall what stands over the field is, for the messages to leave room. */
+  public luckgramSetExtraHeight(px: number) {
+    px = Math.max(0, Math.round(px) || 0);
+    if(px === this.luckgramExtraHeight) return;
+    this.luckgramExtraHeight = px;
+    this.notifyChatInputHeight();
   }
 
   public passEventToInput(e: KeyboardEvent): void {
