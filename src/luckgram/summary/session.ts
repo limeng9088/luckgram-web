@@ -62,11 +62,23 @@ export default class SummarySession {
    */
   public async summarize(range: SummaryRange, callbacks: {onProgress?: (progress: SummaryProgress) => void, onText?: (text: string) => void} = {}): Promise<string> {
     const signal = this.begin();
+    // * where the time goes, never what is said: for a summary that was slow to start
+    const started = Date.now();
+    let loadedAt = 0, firstTextAt = 0;
+    const onText = callbacks.onText && ((text: string) => {
+      if(!firstTextAt) {
+        firstTextAt = Date.now();
+        console.debug('[luckgram] summary', {range, messages: this.lines.length, loadMs: loadedAt - started, firstTextMs: firstTextAt - loadedAt});
+      }
+
+      callbacks.onText(text);
+    });
     callbacks.onProgress?.({stage: 'loading', loaded: 0, total: 0});
     this.lines = await this.deps.load(range, {
       signal,
       onProgress: (loaded, total) => callbacks.onProgress?.({stage: 'loading', loaded, total})
     });
+    loadedAt = Date.now();
     this.ids = new Set(this.lines.map((line) => line.id));
     if(!this.lines.length) throw new EmptyRangeError();
 
@@ -76,7 +88,7 @@ export default class SummarySession {
       params: {source_messages: sourceMessages},
       messages: [{role: 'user', content}],
       signal,
-      onDelta: stream && callbacks.onText ? (_delta, whole) => callbacks.onText(whole) : undefined
+      onDelta: stream && onText ? (_delta, whole) => onText(whole) : undefined
     });
 
     if(parts.length === 1) {

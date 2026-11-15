@@ -490,9 +490,17 @@ body.has-auth-pages {
 
 // * "转写失败 · 重试", in the place of the transcription
 .luckgram-transcribe-retry {
+  // * the colour upstream gives its own error line: after a part that was transcribed, only this line has it
+  color: var(--message-primary-color);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+// * the part of a long recording that was transcribed before a piece failed: the retry line after it, on its own line
+.luckgram-transcribe-partial {
+  display: block;
+  margin-block-end: .25rem;
 }
 
 // * dictation: its button beside the emoji button, and the bar over the field while it listens
@@ -706,7 +714,10 @@ body.has-auth-pages {
   // * docked right column's). Without the left column docked (a narrow window) it covers the column's
   // * padding too, as the message area does
   inset: calc(var(--page-chats-padding, 0px) * -1);
-  z-index: 3;
+  // * under the side columns' drag handles (`.sidebar-resize-handle`, z-index 3), which reach a few
+  // * pixels into this column: at 3 the page, coming later, lay over them. The chat under the page is
+  // * out of sight and takes no presses (below), so nothing of it has to be covered
+  z-index: 2;
 
   // * $floating-left-sidebar + 1 (upstream's variables.scss): the left column is docked from here up
   @media only screen and (min-width: 926px) {
@@ -851,12 +862,13 @@ body.luckgram-ai-open {
   cursor: pointer;
 }
 
-// * the back arrow is for a window with one column
+// * the back arrow is for a window where the chat list is not docked beside the page: one column, or a
+// * list that floats over the middle column (upstream's chat header shows its own from the same width)
 .luckgram-ai-back {
   display: none;
   font-size: 1.5rem;
 
-  @media (max-width: 600px) {
+  @media (max-width: 925px) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -923,6 +935,26 @@ body.luckgram-ai-open {
     font-size: .9375rem;
     line-height: 1.375rem;
   }
+}
+
+// * a table of a reply: its lines as they came, in a fixed-width font, never wrapped — the box scrolls
+// * sideways instead. Not a block of code: no shell around it
+.luckgram-ai-table {
+  display: block;
+  max-width: 100%;
+  margin: .375rem 0;
+  padding: 0 0 .25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: pre;
+  font-family: var(--font-monospace);
+  font-size: .875em;
+  line-height: 1.5;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  tab-size: 4;
 }
 
 .luckgram-ai-bubble {
@@ -1098,6 +1130,17 @@ body.luckgram-ai-open {
   }
 }
 
+// * a line over the field: what "问 AI" left out of a long content, until the text is edited or sent
+.luckgram-ai-field-notice {
+  margin: 0 .25rem .375rem;
+  font-size: .8125rem;
+  line-height: 1.25rem;
+  color: var(--secondary-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .luckgram-ai-input-row {
   display: flex;
   align-items: flex-end;
@@ -1175,6 +1218,24 @@ body.luckgram-ai-open {
   cursor: pointer;
   user-select: none;
 
+  // * the list scrolls under the layer the row is in, and the layer has no colour of its own: its other
+  // * panels (the suggestion bar, the folder tabs) are opaque, its backdrop fades out towards the bottom —
+  // * where this row is, so the chats scrolled under it showed through its text. The column's colour is
+  // * laid behind the row, from edge to edge (the row's own margins included)
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 -.5rem -.25rem;
+    z-index: -1;
+    background-color: var(--surface-color);
+    pointer-events: none;
+
+    // * the folder tabs over the row end with a margin of their own: no gap for the chats to show in
+    .has-horizontal-folders & {
+      top: -.5rem;
+    }
+  }
+
   &.is-unpinned {
     display: none;
   }
@@ -1187,6 +1248,10 @@ body.luckgram-ai-open {
     margin: 0 0 .25rem;
     padding: 0;
     border-radius: 0;
+
+    &::before {
+      inset-inline: 0;
+    }
 
     .luckgram-ai-row-texts {
       display: none;
@@ -1422,8 +1487,20 @@ body.luckgram-ai-open {
   font-weight: var(--font-weight-bold, 500);
 }
 
+// * "停止", under the points while they are being written
+.luckgram-summary-stop {
+  margin-top: .375rem;
+}
+
 .luckgram-summary-answer {
   white-space: pre-wrap;
+
+  // * Markdown's own blocks (a block of code, a table) inside an answer
+  pre {
+    margin: .25rem 0;
+    white-space: pre;
+    overflow-x: auto;
+  }
 
   &.is-error {
     color: var(--danger-color);

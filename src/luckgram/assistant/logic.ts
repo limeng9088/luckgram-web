@@ -143,7 +143,8 @@ export function findInterceptor<T extends {prefix: string}>(interceptors: T[], t
  * fenced code with its copy button), which knows no headings, lists or tables:
  *   - a heading becomes a bold line;
  *   - a list item keeps its mark as text ("• item", "1. item");
- *   - a table goes into a fence, where a fixed-width font keeps its columns in line.
+ *   - a table goes into a fence of its own kind (TABLE_LANGUAGE): render.ts draws it as plain lines
+ *     in a fixed-width font, which keeps its columns in line — not as a block of code.
  * Code that is already fenced is left as it is.
  */
 export function prepareMarkdown(markdown: string): string {
@@ -155,7 +156,7 @@ export function prepareMarkdown(markdown: string): string {
   const flushTable = () => {
     if(!table.length) return;
     // * a real table has its line of dashes; anything else was just text with bars
-    if(table.length >= 2 && /^\s*\|?\s*:?-{2,}/.test(table[1])) out.push('```', ...alignTable(table), '```');
+    if(table.length >= 2 && /^\s*\|?\s*:?-{2,}/.test(table[1])) out.push('```' + TABLE_LANGUAGE, ...alignTable(table), '```');
     else out.push(...table);
     table = [];
   };
@@ -200,6 +201,9 @@ export function prepareMarkdown(markdown: string): string {
   if(inFence) out.push('```');
   return out.join('\n');
 }
+
+/** The "language" of the fence a table is put in: what tells it from a block of code the model wrote. */
+export const TABLE_LANGUAGE = 'lgtable';
 
 /** The table's cells padded to their column's width; the line of dashes is drawn to match. */
 export function alignTable(rows: string[]): string[] {
@@ -368,7 +372,34 @@ export function canReadFile(mimeType: string | undefined, fileName: string | und
  * names, the file's name and — for a text file — its content. Ends with an empty line: the user
  * writes the question under it. Cut to what a request may carry, the file's content first.
  */
-export function composeAskText(parts: {text?: string, links?: string[], fileName?: string, fileContent?: string}, maxChars = DEFAULT_MAX_INPUT_CHARS): string {
+export function composeAskText(parts: AskParts, maxChars = DEFAULT_MAX_INPUT_CHARS): string {
+  return composeAsk(parts, maxChars).text;
+}
+
+export type AskParts = {text?: string, links?: string[], fileName?: string, fileContent?: string};
+
+/**
+ * What was left out of what "问 AI" brought, for the user to be told (the "…" alone does not say):
+ * `kept` characters of the file's content, or of the whole, are there; `fileLeftOut` — there was
+ * no room for the file's content at all, its name alone went.
+ */
+export type AskCut = {kept?: number, of?: 'file' | 'all', fileLeftOut?: boolean};
+
+/** [中文, English] of the notice for a cut; nothing when nothing was cut. */
+export function getAskCutText(cut: AskCut | undefined): [string, string] | undefined {
+  if(!cut) return;
+  if(cut.kept) {
+    return cut.of === 'file' ?
+      [`文件内容较长，已截取前 ${cut.kept} 字`, `The file is long: its first ${cut.kept} characters were taken`] :
+      [`内容较长，已截取前 ${cut.kept} 字`, `The content is long: its first ${cut.kept} characters were taken`];
+  }
+
+  if(cut.fileLeftOut) return ['内容较长，没有带上文件内容', 'The content is long: the file\'s content was left out'];
+}
+
+/** composeAskText, with what was cut. */
+export function composeAsk(parts: AskParts, maxChars = DEFAULT_MAX_INPUT_CHARS): {text: string, cut?: AskCut} {
+  let cut: AskCut;
   const text = (parts.text || '').trim();
   const links = [...new Set((parts.links || []).filter((link) => link && !text.includes(link)))];
   const blocks: string[] = [];
@@ -381,12 +412,20 @@ export function composeAskText(parts: {text?: string, links?: string[], fileName
     if(content) {
       // * room for the rest and for the question itself
       const room = maxChars - blocks.join('\n\n').length - block.length - 200;
-      if(room > 200) block += '\n' + (content.length > room ? content.slice(0, room) + '\n…' : content);
+      if(room > 200) {
+        if(content.length > room) cut = {kept: room, of: 'file'};
+        block += '\n' + (content.length > room ? content.slice(0, room) + '\n…' : content);
+      } else {
+        cut = {fileLeftOut: true};
+      }
     }
 
     blocks.push(block);
   }
 
   const out = blocks.join('\n\n');
-  return out ? (out.length > maxChars ? out.slice(0, maxChars - 1) + '…' : out) + '\n\n' : '';
+  if(!out) return {text: ''};
+  // * the whole is cut: that is what there is to say, whatever was said of the file
+  if(out.length > maxChars) return {text: out.slice(0, maxChars - 1) + '…\n\n', cut: {kept: maxChars - 1, of: 'all'}};
+  return {text: out + '\n\n', cut};
 }

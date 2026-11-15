@@ -1,3 +1,4 @@
+import {vi} from 'vitest';
 // * Luckgram Web (luckgram-specs#188, W8): the AI assistant — conversations, context, extension points, Markdown
 
 import 'fake-indexeddb/auto';
@@ -5,7 +6,7 @@ import {IDBFactory} from 'fake-indexeddb';
 import {LuckgramIndexedDBStorage, LuckgramMemoryStorage} from '@/luckgram/core/storage';
 import {AssistantStore} from '@/luckgram/assistant/store';
 import {
-  AI_HASH, ASK_FILE_MAX_BYTES, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, canReadFile, composeAskText, isTextFile, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
+  AI_HASH, ASK_FILE_MAX_BYTES, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, canReadFile, composeAsk, composeAskText, getAskCutText, isTextFile, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
   getConversationsToPrune, getOrphanKeys, makeId, makeTitle, markdownToEntities, newConversation, prepareMarkdown, sortConversations
 } from '@/luckgram/assistant/logic';
 import {
@@ -205,7 +206,8 @@ describe('luckgram assistant: Markdown for upstream\'s message renderer', () => 
   test('a table goes into a fence with its columns in line; bars that are no table stay as they are', () => {
     const out = prepareMarkdown('before\n| 名称 | Price |\n|---|---:|\n| 苹果 | 3 |\n| Watermelon | 12 |\nafter').split('\n');
     expect(out[0]).toBe('before');
-    expect(out[1]).toBe('```');
+    // * a fence of its own kind: render.ts draws it as plain fixed-width lines, not as a block of code
+    expect(out[1]).toBe('```lgtable');
     expect(out[out.length - 2]).toBe('```');
     expect(out[out.length - 1]).toBe('after');
     const rows = out.slice(2, -2);
@@ -274,7 +276,7 @@ describe('luckgram assistant: Markdown as text with entities', () => {
     const table = markdownToEntities('| a | b |\n|---|---|\n| 1 | 2 |');
     expect(table.entities.map((entity) => entity._)).toEqual(['messageEntityPre']);
     // * a block without a language still names one, an empty one: upstream's renderer reads it
-    expect(table.entities[0].language).toBe('');
+    expect(table.entities[0].language).toBe('lgtable');
     expect(table.text).toBe('a  | b\n-- | --\n1  | 2');
 
     const cut = markdownToEntities('look:\n```js\nconst a = 1');
@@ -333,5 +335,74 @@ describe('luckgram assistant: "问 AI"', () => {
     // * no room worth using: the name alone
     expect(composeAskText({text: 'y'.repeat(700), fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000)).toBe('y'.repeat(700) + '\n\n[big.log]\n\n');
     expect(composeAskText({text: 'z'.repeat(3000)}, 1000).length).toBe(1002);
+  });
+
+  test('what was cut is said in words, not by the "…" alone (specs#188)', () => {
+    // * nothing cut: nothing said
+    expect(composeAsk({text: '短', fileName: 'a.txt', fileContent: '内容'}).cut).toBeUndefined();
+    expect(getAskCutText(undefined)).toBeUndefined();
+
+    // * a long file: how much of it is there
+    const file = composeAsk({text: '总结这个文件', fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000);
+    expect(file.cut).toEqual({kept: 1000 - '总结这个文件'.length - '[big.log]'.length - 200, of: 'file'});
+    expect(file.text.split('x').length - 1).toBe(file.cut.kept);
+    expect(getAskCutText(file.cut)[0]).toBe(`文件内容较长，已截取前 ${file.cut.kept} 字`);
+
+    // * no room for the file's content at all
+    const none = composeAsk({text: 'y'.repeat(700), fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000);
+    expect(none.cut).toEqual({fileLeftOut: true});
+    expect(getAskCutText(none.cut)[0]).toBe('内容较长，没有带上文件内容');
+
+    // * the message itself is too long
+    const all = composeAsk({text: 'z'.repeat(3000)}, 1000);
+    expect(all.cut).toEqual({kept: 999, of: 'all'});
+    expect(getAskCutText(all.cut)[0]).toBe('内容较长，已截取前 999 字');
+    expect(all.text).toBe('z'.repeat(999) + '…\n\n');
+  });
+});
+
+describe('luckgram assistant: a table is drawn as its own lines, not as a block of code (specs#188)', () => {
+  /** What upstream's renderer draws for a block of code (wrapRichText.ts: messageEntityPre). */
+  const codeBlock = (text: string) => {
+    const pre = document.createElement('pre');
+    pre.classList.add('quote-like', 'code');
+    pre.innerHTML = '<div class="code-header"><span class="code-header-name">复制</span></div><div class="code-content"><code class="code-code"></code></div>';
+    pre.querySelector('code').textContent = text;
+    return pre;
+  };
+
+  test('no shell of a code block around it; a block of code the model wrote keeps its own', async() => {
+    const {drawTables} = await import('@/luckgram/assistant/tables');
+    const {text, entities} = markdownToEntities('对比如下：\n\n| 项目 | Price |\n|---|---|\n| 苹果 | 3 |\n| Banana | 12 |\n\n```js\nconst a = 1;\n```\n完。');
+    const blocks = entities.filter((entity) => entity._ === 'messageEntityPre');
+    expect(blocks.map((block) => block.language)).toEqual(['lgtable', 'js']);
+
+    const host = document.createElement('div');
+    host.append('对比如下：', ...blocks.map((block) => codeBlock(text.slice(block.offset, block.offset + block.length))), '完。');
+    drawTables(host, text, entities);
+
+    const table = host.querySelector('pre.luckgram-ai-table');
+    expect(table).not.toBeNull();
+    expect(table.querySelector('.code-header')).toBeNull();
+    const lines = table.textContent.split('\n');
+    expect(lines.length).toBe(4);
+    expect(lines[0]).toContain('项目');
+    expect(lines[3]).toContain('Banana');
+    expect(table.textContent).not.toContain('```');
+    expect(host.textContent).not.toContain('lgtable');
+
+    // * the code is still a block of code, with its header; the table is not one of them
+    const code = host.querySelectorAll('pre.code');
+    expect(code.length).toBe(1);
+    expect(code[0].querySelector('.code-header')).not.toBeNull();
+    expect(code[0].textContent).toContain('const a = 1;');
+  });
+
+  test('blocks that do not match what was drawn are left as they are', async() => {
+    const {drawTables} = await import('@/luckgram/assistant/tables');
+    const {text, entities} = markdownToEntities('| a | b |\n|---|---|\n| 1 | 2 |');
+    const host = document.createElement('div');
+    drawTables(host, text, entities);
+    expect(host.children.length).toBe(0);
   });
 });
