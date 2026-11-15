@@ -115,12 +115,14 @@ describe('luckgram voice: what is sent', () => {
 
     expect(isRetryablePieceError(fail('timeout'))).toBe(true);
     expect(isRetryablePieceError(fail('network_error'))).toBe(true);
+    expect(isRetryablePieceError(fail('upstream_unavailable'))).toBe(true);
+    expect(isRetryablePieceError(fail('content_rejected'))).toBe(false);
     expect(isRetryablePieceError(fail('quota_exceeded'))).toBe(false);
     expect(isRetryablePieceError(fail('input_too_large'))).toBe(false);
     expect(isRetryablePieceError(new Error('x'))).toBe(false);
 
-    // * the second piece times out once: asked again, and the whole is there — 4 calls for 3 pieces
-    const once = make(['一', {error: 'timeout'}, '二', '三']);
+    // * the second piece gets a 503 once: asked again, and the whole is there — 4 calls for 3 pieces
+    const once = make(['一', {error: 'upstream_unavailable'}, '二', '三']);
     expect(await transcribeInPieces(blob, {...base, send: once.send})).toBe('一二三');
     expect(once.asked).toEqual([undefined, 'zh', 'zh', 'zh']);
 

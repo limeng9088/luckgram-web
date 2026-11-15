@@ -34,13 +34,13 @@ export class PartialTranscription extends Error {
 }
 
 /**
- * Whether a piece that failed is worth asking once more: the server did not answer in time, or
- * could not be reached. Not what asking again cannot change (the quota, a file too large, a
- * refusal).
+ * Whether a piece that failed is worth asking once more: the server did not answer in time, could
+ * not be reached, or said the service behind it did not answer (503 upstream_unavailable: nothing
+ * was counted). Not what asking again cannot change (the quota, a file too large, a refusal).
  */
 export function isRetryablePieceError(err: unknown): boolean {
   const code = (err as any)?.code;
-  return code === 'timeout' || code === 'network_error';
+  return code === 'timeout' || code === 'network_error' || code === 'upstream_unavailable';
 }
 
 async function sendWithRetry(send: (piece: Blob, language?: string) => Promise<string | PieceResult>, piece: Blob, language?: string) {
