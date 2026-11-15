@@ -395,7 +395,7 @@ export default class LuckgramAiWriting {
     this.insertOverField(panel);
     this.bindKeys();
     // * Esc closes the panel and nothing behind it (upstream would close the chat)
-    this.panelEscape = holdEscape(() => this.hidePanel());
+    this.panelEscape = holdEscape(() => this.hidePanel(), () => panel.isConnected);
   }
 
   private hidePanel() {
