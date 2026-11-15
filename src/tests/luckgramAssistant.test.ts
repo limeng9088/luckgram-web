@@ -303,6 +303,12 @@ describe('luckgram assistant: the row over the chat list', () => {
 
 // * read as upstream's renderer is loaded: the test's page has no canvas to ask
 vi.mock('@environment/webpSupport', () => ({default: false}));
+// * colouring a block of code fetches the language's grammar: nothing to fetch from in a test
+vi.mock('@/codeLanguages', () => ({
+  CodeLanguageAliases: {js: 'javascript'},
+  highlightCode: (): undefined => undefined,
+  highlightCodeAuto: async(): Promise<undefined> => undefined
+}));
 
 describe('luckgram assistant: a table is drawn as its own lines, not as a block of code (specs#188)', () => {
   test('no shell of a code block around it; a block of code the model wrote keeps its own', async() => {
