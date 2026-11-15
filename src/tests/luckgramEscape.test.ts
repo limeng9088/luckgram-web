@@ -68,6 +68,19 @@ describe('luckgram Esc for its own layers', () => {
     expect(upstreamMayClose()).toBe(true);
   });
 
+  it('a layer that left the page without saying so does not swallow the key', () => {
+    const close = vi.fn();
+    let there = true;
+    holdEscape(close, () => there);
+    expect(upstreamMayClose()).toBe(false);
+
+    there = false;
+    expect(upstreamMayClose()).toBe(true);
+    const event = press();
+    expect(close).not.toHaveBeenCalled();
+    expect(event.defaultPrevented).toBe(false);
+  });
+
   it('leaves other keys alone', () => {
     const close = vi.fn();
     holdEscape(close);
