@@ -29,6 +29,45 @@ describe('luckgram voice: what is sent', () => {
     expect(shouldSendAsIs('audio/ogg', 0, max)).toBe(false);
   });
 
+  test('a recording over three minutes is cut into pieces even when its file is small (specs#186)', () => {
+    const max = getMaxBytes(4);
+    // * Opus: twenty minutes fit 4 MB, and the server has a minute to answer a request
+    expect(shouldSendAsIs('audio/ogg', 3 * MB, max, 20 * 60)).toBe(false);
+    expect(shouldSendAsIs('audio/ogg', 400 * 1024, max, 181)).toBe(false);
+    expect(shouldSendAsIs('audio/ogg', 400 * 1024, max, 180)).toBe(true);
+    expect(shouldSendAsIs('audio/ogg', 3 * MB, max, 28)).toBe(true);
+    // * the size limit still holds for a short one
+    expect(shouldSendAsIs('audio/ogg', 5 * MB, max, 28)).toBe(false);
+    // * no length known: as it is only while the file is small
+    expect(shouldSendAsIs('audio/webm', 1 * MB, max)).toBe(true);
+    expect(shouldSendAsIs('audio/webm', 1 * MB + 1, max)).toBe(false);
+    expect(shouldSendAsIs('audio/webm', 2 * MB, max, 0)).toBe(false);
+
+    // * a piece is two minutes at most, whatever size the server allows
+    expect(getSamplesPerPiece(getMaxBytes(4)) / PIECE_SAMPLE_RATE).toBeLessThanOrEqual(120);
+    expect(getSamplesPerPiece(25 * MB) / PIECE_SAMPLE_RATE).toBe(120);
+    expect(getSamplesPerPiece(1 * MB) / PIECE_SAMPLE_RATE).toBeLessThan(40);
+  });
+
+  test('a long voice message: decoded and sent piece by piece, each two minutes at most', async() => {
+    const {transcribeInPieces} = await import('@/luckgram/voice/pieces');
+    const sent: Blob[] = [];
+    const send = async(piece: Blob) => (sent.push(piece), 'p' + sent.length);
+    // * 7 minutes of sound in a small Opus file
+    const decode = async() => new Float32Array(7 * 60 * PIECE_SAMPLE_RATE);
+    const blob = new Blob([new Uint8Array(900 * 1024)], {type: 'audio/ogg'});
+
+    expect(await transcribeInPieces(blob, {maxBytes: getMaxBytes(4), durationSeconds: 7 * 60, send, decode})).toBe('p1 p2 p3 p4');
+    expect(sent.map((piece) => piece.type)).toEqual(['audio/wav', 'audio/wav', 'audio/wav', 'audio/wav']);
+    for(const piece of sent) expect((piece.size - 44) / 2 / PIECE_SAMPLE_RATE).toBeLessThanOrEqual(120);
+
+    // * a short one of the same size goes as it is, in one request
+    sent.length = 0;
+    await transcribeInPieces(blob, {maxBytes: getMaxBytes(4), durationSeconds: 28, send, decode});
+    expect(sent.length).toBe(1);
+    expect(sent[0].type).toBe('audio/ogg');
+  });
+
   test('pieces of about two minutes, each under the limit, covering every sample once', () => {
     const max = getMaxBytes(4);
     const perPiece = getSamplesPerPiece(max);
@@ -74,6 +113,8 @@ describe('luckgram voice: what is sent', () => {
   test('errors: what the user is told', () => {
     expect(getVoiceFailure('quota_exceeded', true)).toBe('quota');
     expect(getVoiceFailure('network_error', true)).toBe('network');
+    expect(getVoiceFailure('timeout', true)).toBe('timeout');
+    expect(getVoiceFailureText('timeout')[0]).toBe('转写超时，请稍后重试');
     expect(getVoiceFailure('upstream_unavailable', false)).toBe('network');
     expect(getVoiceFailure('upstream_unavailable', true)).toBe('other');
     expect(getVoiceFailure(undefined, true, true)).toBe('unsupported');
