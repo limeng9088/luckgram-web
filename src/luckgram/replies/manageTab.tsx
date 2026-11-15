@@ -12,6 +12,7 @@ import {attachClickEvent} from '@helpers/dom/clickEvent';
 import Sortable from '@helpers/dom/sortable';
 import {getMiddleware} from '@helpers/middleware';
 import {lgText} from '@/luckgram/text';
+import {holdEscape} from '@/luckgram/core/escape';
 import {countCharacters} from '@/luckgram/notes/logic';
 import {MAX_REPLIES, MAX_REPLY_LENGTH, QuickReply, checkReply, getReplyErrorText} from '@/luckgram/replies/logic';
 import {getRepliesAccount, repliesStore} from '@/luckgram/replies/instance';
@@ -69,11 +70,17 @@ function makeEditor(options: {text: string, others: QuickReply[], adding: boolea
     if(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !save.disabled) {
       e.preventDefault();
       save.click();
-    } else if(e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      options.onCancel();
     }
+  });
+  // * Esc in the field cancels the editing only (upstream takes the key first and would close the page)
+  let releaseEscape: () => void;
+  field.addEventListener('focus', () => {
+    releaseEscape?.();
+    releaseEscape = holdEscape(() => options.onCancel(), () => field.isConnected);
+  });
+  field.addEventListener('blur', () => {
+    releaseEscape?.();
+    releaseEscape = undefined;
   });
 
   const row = el('div', 'luckgram-replies-editor-row');
