@@ -924,6 +924,17 @@ export default class FiltersStorage extends AppManager {
 
   /** The chat's latest message and those of its messages that are kept here, the latest first: nothing is asked of the server. */
   private luckgramGetTexts(peerId: PeerId, topMessage: number) {
+    return this.luckgramGetMessages(peerId, topMessage).map((message) => message.text);
+  }
+
+  /** The chat's messages a keyword folder found its keywords in, the latest first: what "跳到下一个" goes through. */
+  public luckgramGetKeywordMessages(filterId: number, peerId: PeerId) {
+    const dialog = this.appMessagesManager.getDialogOnly(peerId);
+    if(!dialog || !this.luckgramFolders.has(filterId)) return [];
+    return this.luckgramFolders.findMessages(filterId, this.luckgramGetMessages(peerId, dialog.top_message));
+  }
+
+  private luckgramGetMessages(peerId: PeerId, topMessage: number): {mid: number, text: string | undefined}[] {
     const mids = new Set<number>(topMessage ? [topMessage] : []);
     try {
       const first = this.appMessagesManager.getHistoryStorage(peerId)?.history?.first;
@@ -935,7 +946,7 @@ export default class FiltersStorage extends AppManager {
 
     return [...mids].sort((a, b) => b - a).map((mid) => {
       const message = this.appMessagesManager.getMessageByPeer(peerId, mid) as any;
-      return message?._ === 'message' ? message.message as string : undefined;
+      return {mid, text: message?._ === 'message' ? message.message as string : undefined};
     });
   }
 

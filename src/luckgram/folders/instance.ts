@@ -13,10 +13,17 @@ import {watchFeatures} from '@/luckgram/core/hooks';
 import {onAccountLeaving} from '@/luckgram/core/logout';
 import {luckgramStorage} from '@/luckgram/core/settings';
 import {lgText} from '@/luckgram/text';
+import {setKeywordFolderLookup} from '@/luckgram/folders/current';
 import {KEYWORD_FOLDERS} from '@/luckgram/folders/logic';
 import {FoldersStore} from '@/luckgram/folders/store';
 
 export const foldersStore = new FoldersStore(luckgramStorage);
+
+// * the chat list and the chat ask for a folder's keywords here (current.ts), without importing this
+setKeywordFolderLookup((id) => {
+  const account = getFoldersAccount();
+  return account && isFeatureEnabled(KEYWORD_FOLDERS) ? foldersStore.get(account, id) : undefined;
+});
 
 // * this tab's account logs out: its keyword folders go with it
 onAccountLeaving((account) => foldersStore.deleteAccount(account));

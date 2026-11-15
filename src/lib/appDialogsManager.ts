@@ -1,6 +1,8 @@
 import type {MyDialogFilter} from '@lib/storages/filters';
 import {isLocalFolderId} from '@/luckgram/folders/guard';
 import {editKeywordFolder} from '@/luckgram/folders/hooks';
+import {getKeywordMatcher} from '@/luckgram/folders/current';
+import {markKeywords} from '@/luckgram/folders/highlight';
 import type {Dialog, ForumTopic, MyMessage, RequestHistoryOptions, SavedDialog} from '@appManagers/appMessagesManager';
 import type {MyDocument} from '@appManagers/appDocsManager';
 import type {State} from '@config/state';
@@ -2154,6 +2156,13 @@ export class AppDialogsManager {
     return list;
   }
 
+  /** Luckgram (specs#191): the folder whose list the row is of, when it is a keyword folder. */
+  private luckgramGetRowFilterId(peerId: PeerId, dialogElement: DialogElement): number | undefined {
+    for(const filterId in this.xds) {
+      if(isLocalFolderId(+filterId) && this.xds[filterId].getDialogElement(peerId) === dialogElement) return +filterId;
+    }
+  }
+
   public setLastMessageN(options: Parameters<AppDialogsManager['setLastMessage']>[0]) {
     const promise = this.setLastMessage(options);
     return promise.catch((err: ApiError) => {
@@ -2462,6 +2471,10 @@ export class AppDialogsManager {
           container: parts[parts.length - 1],
           match: {type: 'search', query: highlightWord}
         });
+      } else if(lastMessage && parts.length) {
+        // * Luckgram (specs#191): in a keyword folder, the keywords standing in the preview are marked
+        const luckgramMatcher = getKeywordMatcher(this.luckgramGetRowFilterId(dialog.peerId, dialogElement));
+        if(luckgramMatcher) markKeywords(parts[parts.length - 1] as HTMLElement, luckgramMatcher);
       }
     }
 
