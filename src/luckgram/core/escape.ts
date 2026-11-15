@@ -10,13 +10,27 @@
 
 import appNavigationController from '@components/appNavigationController';
 
-type Layer = {close: () => void};
+type Layer = {close: () => void, alive?: () => boolean};
 
 const layers: Layer[] = [];
 let bound = false;
 
+/** Drops the layers that went without saying so (their element was taken out of the page). */
+function prune() {
+  for(let i = layers.length - 1; i >= 0; --i) {
+    let alive = true;
+    try {
+      alive = layers[i].alive?.() ?? true;
+    } catch(err) {}
+
+    if(!alive) layers.splice(i, 1);
+  }
+
+  return layers.length;
+}
+
 function onKeyDown(e: KeyboardEvent) {
-  if(e.key !== 'Escape' || e.defaultPrevented || !layers.length) return;
+  if(e.key !== 'Escape' || e.defaultPrevented || !prune()) return;
   // * a text being composed (an input method's candidates) takes its own Esc
   if(e.isComposing || e.keyCode === 229) return;
 
@@ -33,17 +47,18 @@ function onKeyDown(e: KeyboardEvent) {
 function bind() {
   if(bound) return;
   bound = true;
-  appNavigationController.registerEscapeHandler(() => !layers.length);
+  appNavigationController.registerEscapeHandler(() => !prune());
   window.addEventListener('keydown', onKeyDown, true);
 }
 
 /**
  * Says a layer is open: Esc calls `close` (once) instead of reaching upstream. Returns what to call
  * when the layer closes by any other way; calling it again, or after Esc, does nothing.
+ * @param alive for a layer that may leave the page without closing: whether it is still there
  */
-export function holdEscape(close: () => void): () => void {
+export function holdEscape(close: () => void, alive?: () => boolean): () => void {
   bind();
-  const layer: Layer = {close};
+  const layer: Layer = {close, alive};
   layers.push(layer);
   return () => {
     const index = layers.indexOf(layer);
@@ -53,5 +68,5 @@ export function holdEscape(close: () => void): () => void {
 
 /** How many layers hold Esc now (for tests). */
 export function heldEscapeCount() {
-  return layers.length;
+  return prune();
 }
