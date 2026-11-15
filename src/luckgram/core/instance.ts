@@ -11,8 +11,8 @@ import {LuckgramAI} from '@/luckgram/core/ai';
 import {lgText} from '@/luckgram/text';
 
 export const AI_CONSENT_TEXT: [string, string] = [
-  '你选中的内容会发送到 Luckgram 的 AI 服务，由 OpenAI 处理后返回。',
-  'The content you select is sent to Luckgram\'s AI service and processed by OpenAI before it is returned.'
+  '您提交的内容会发送到 Luckgram 的 AI 服务，由 OpenAI 处理后返回。',
+  'The content you submit is sent to Luckgram\'s AI service and processed by OpenAI before it is returned.'
 ];
 
 function askConsent(): Promise<boolean> {
