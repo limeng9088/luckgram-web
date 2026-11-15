@@ -485,3 +485,99 @@ body.has-auth-pages {
     cursor: pointer;
   }
 }
+
+// ---------------------------------------------------------------- W6: voice to text (specs#186)
+
+// * "转写失败 · 重试", in the place of the transcription
+.luckgram-transcribe-retry {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+// * dictation: its button beside the emoji button, and the bar over the field while it listens
+.luckgram-dictation {
+  flex: 0 0 auto;
+  position: relative;
+
+  // * a small "A" on the microphone: this one writes text, upstream's own records a voice message
+  &::after {
+    content: 'A';
+    position: absolute;
+    inset-block-end: .375rem;
+    inset-inline-end: .375rem;
+    min-width: .875rem;
+    height: .875rem;
+    padding: 0 .125rem;
+    border-radius: .25rem;
+    background: var(--surface-color);
+    color: inherit;
+    font: 700 .625rem/.875rem var(--font-regular, sans-serif);
+    text-align: center;
+    pointer-events: none;
+  }
+
+  &.is-recording {
+    color: var(--danger-color);
+  }
+
+  &.is-loading {
+    pointer-events: none;
+    animation: luckgram-translation-loading 1.2s ease-in-out infinite;
+  }
+}
+
+.luckgram-dictation-bar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .375rem 1rem;
+  font-size: .875rem;
+  line-height: 1.25rem;
+  color: var(--secondary-text-color);
+
+  .luckgram-dictation-level {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    height: 1.25rem;
+
+    span {
+      width: 3px;
+      height: 100%;
+      border-radius: 2px;
+      background: var(--danger-color);
+      transform: scaleY(.2);
+      transition: transform .12s linear;
+    }
+  }
+
+  &.is-working .luckgram-dictation-level span {
+    background: var(--secondary-text-color);
+    animation: luckgram-translation-loading 1.2s ease-in-out infinite;
+  }
+
+  .luckgram-dictation-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .luckgram-dictation-cancel {
+    flex: 0 0 auto;
+    padding: 0 .25rem;
+    border: none;
+    background: none;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: var(--font-weight-bold, 500);
+    cursor: pointer;
+  }
+
+  &.is-working .luckgram-dictation-cancel {
+    display: none;
+  }
+}

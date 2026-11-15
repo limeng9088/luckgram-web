@@ -50,7 +50,8 @@ export function hashText(text: string): string {
 export const translationKey = (account: number | string, toLang: string, text: string) => `t:${account}:${toLang}:${hashText(text)}`;
 /** That a message is shown translated: by account and message. */
 export const stateKey = (account: number | string, peerId: number | string, mid: number | string) => `s:${account}:${peerId}_${mid}`;
-export const isKeyOfAccount = (key: string, account: number | string) => key.startsWith(`t:${account}:`) || key.startsWith(`s:${account}:`);
+/** Everything the `cache` store keeps for an account: translations (t), their states (s), transcriptions (v, W6). */
+export const isKeyOfAccount = (key: string, account: number | string) => /^[a-z]:/.test(key) && key.slice(2).startsWith(account + ':');
 
 /**
  * The keys to drop: older than 7 days, and the oldest beyond 2000 — per account and kind.

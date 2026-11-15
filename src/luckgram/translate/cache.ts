@@ -89,6 +89,21 @@ export class TranslationCache {
     return this.write({[key]: record});
   }
 
+  // ------------------------------------------------------------------ anything else kept by key (W6: transcriptions)
+
+  /** A text kept under a key of the `x:<account>:…` shape, with the same limits as the translations. */
+  public getText(key: string): string | undefined {
+    const record = this.records.get(key) as CacheRecord;
+    return typeof(record?.t) === 'string' ? record.t : undefined;
+  }
+
+  public putText(key: string, text: string) {
+    const record: CacheRecord = {t: text, at: this.now(), v: 'l'};
+    this.records.set(key, record);
+    this.prune();
+    return this.write({[key]: record});
+  }
+
   /** An account logged out: nothing of it stays. */
   public clearAccount(account: number | string) {
     const drop = [...this.records.keys()].filter((key) => isKeyOfAccount(key, account));

@@ -702,3 +702,38 @@ describe('luckgram announcements', () => {
     expect(shouldRefreshAnnouncements(111 * minute, 80 * minute, 108 * minute)).toBe(false);
   });
 });
+
+describe('luckgram features: a switch takes effect at once', () => {
+  test('what is not a component is told when a feature goes off and on', async() => {
+    const {watchFeatures} = await import('@/luckgram/core/hooks');
+    const {default: settings} = await import('@/luckgram/core/settings');
+    const {isFeatureEnabled} = await import('@/luckgram/core/features');
+    await settings.ready;
+
+    const onChange = vi.fn();
+    const stop = watchFeatures(['dictation', 'translate_out'], onChange);
+    await Promise.resolve();
+    expect(onChange).not.toHaveBeenCalled();
+
+    await settings.set('dictation', false);
+    await Promise.resolve();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(isFeatureEnabled('dictation')).toBe(false);
+
+    await settings.set('dictation', true);
+    await Promise.resolve();
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    // * another setting is not its business
+    await settings.set('translate_to', 'es');
+    await Promise.resolve();
+    expect(onChange).toHaveBeenCalledTimes(2);
+
+    stop();
+    await settings.set('dictation', false);
+    await Promise.resolve();
+    expect(onChange).toHaveBeenCalledTimes(2);
+    await settings.set('dictation', undefined);
+    await settings.set('translate_to', undefined);
+  });
+});
