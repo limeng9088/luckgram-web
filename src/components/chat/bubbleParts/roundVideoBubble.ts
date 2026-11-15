@@ -16,6 +16,7 @@ import {SpinnerElement} from '@components/spinner';
 import {hotReloadGuard} from '@lib/solidjs/hotReloadGuardProvider';
 import {getBubbleBackground} from '@components/chat/bubbleShape';
 import {onMediaSpoilerClick} from '@components/wrappers/mediaSpoiler';
+import {bindRetryLine, installRetryLines} from '@/luckgram/voice/retryLine';
 
 
 type WrapRoundVideoBubbleOptions = {
@@ -34,6 +35,8 @@ export function wrapRoundVideoBubble({
   searchContext
 }: WrapRoundVideoBubbleOptions) {
   const content = bubble.querySelector('.bubble-content') as HTMLElement;
+  // * Luckgram (W6): the retry line's press has to be listened for before a failure's toast is
+  installRetryLines();
 
   const hasBesideButton = !!bubble.querySelector('.bubble-beside-button');
   const transcribe = document.createElement('div');
@@ -273,14 +276,14 @@ export function wrapRoundVideoBubble({
           }
 
           retry.textContent = voice.getVoiceRetryText(!!partial);
-          retry.addEventListener('click', (e) => {
-            e.stopPropagation();
+          // * heard before the toast that says the failure takes the press (voice/retryLine.ts)
+          bindRetryLine(retry, () => {
             retry.remove();
             partial?.remove();
             const again = new SpinnerElement();
             transcribe.append(again);
             fill().finally(() => again.remove());
-          }, {once: true});
+          });
           transcribedText.prepend(...(partial ? [partial, retry] : [retry]));
         }
       };

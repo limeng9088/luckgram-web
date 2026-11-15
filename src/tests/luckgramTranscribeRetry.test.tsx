@@ -11,6 +11,29 @@ const changes: (() => void)[] = [];
 vi.mock('@components/chat/changeBubble', () => ({default: (_element: HTMLElement, callback: () => void) => changes.push(callback)}));
 const flush = () => changes.splice(0).forEach((change) => change());
 
+// * upstream's toast, as far as presses go: while it shows, the first press anywhere in the page hides
+// * it and goes no further (overlayClickHandler.ts: the document, the capture phase)
+const toastState = vi.hoisted(() => ({open: false, swallowed: 0, listener: undefined as (e: Event) => void}));
+vi.mock('@components/toast', () => {
+  const hideToast = () => {
+    if(!toastState.open) return;
+    toastState.open = false;
+    document.removeEventListener('click', toastState.listener, true);
+  };
+  const toast = () => {
+    hideToast();
+    toastState.open = true;
+    toastState.listener = (e: Event) => {
+      ++toastState.swallowed;
+      e.stopPropagation();
+      e.preventDefault();
+      hideToast();
+    };
+    document.addEventListener('click', toastState.listener, true);
+  };
+  return {toast, toastNew: toast, hideToast};
+});
+
 const calls: {resolve: (text: string) => void, reject: (err: any) => void}[] = [];
 vi.mock('@/luckgram/voice/transcribe', () => ({
   isFreeTranscribeOn: () => true,
@@ -60,10 +83,14 @@ describe('luckgram voice row: a part transcribed, a piece failed', () => {
     // * the error's colour is the line's, not the whole text's
     expect(text.classList.contains('is-error')).toBe(false);
 
-    // * pressed at once: asked again, the part stays while the rest is on its way
+    // * pressed at once, while the toast that says the failure still shows: asked again all the same —
+    // * the toast does not take the press, and goes
+    expect(toastState.open).toBe(true);
     retry.click();
     await tick();
     expect(calls.length).toBe(2);
+    expect(toastState.swallowed).toBe(0);
+    expect(toastState.open).toBe(false);
     expect(host.querySelector('.audio-transcribed-text').textContent).toContain('第一段的文字');
     expect(host.querySelector('.luckgram-transcribe-retry')).toBeNull();
 
@@ -80,6 +107,7 @@ describe('luckgram voice row: a part transcribed, a piece failed', () => {
     host.querySelector<HTMLElement>('.luckgram-transcribe-retry').click();
     await tick();
     expect(calls.length).toBe(3);
+    expect(toastState.swallowed).toBe(0);
 
     calls[2].resolve('第一段的文字第二段的文字');
     await tick();
@@ -115,6 +143,13 @@ describe('luckgram voice row: a part transcribed, a piece failed', () => {
     expect(host.querySelector('.luckgram-transcribe-partial')).toBeNull();
     expect(host.querySelector('.luckgram-transcribe-retry').textContent).toBe('转写失败 · 重试');
     expect(host.querySelector('.audio-transcribed-text').classList.contains('is-error')).toBe(true);
+
+    // * a press elsewhere is still the toast's, as upstream has it: only the retry line is let through
+    expect(toastState.open).toBe(true);
+    const before = toastState.swallowed;
+    host.click();
+    expect(toastState.swallowed).toBe(before + 1);
+    expect(calls.length).toBe(1);
     dispose();
     host.remove();
   });
