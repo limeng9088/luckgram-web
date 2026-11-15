@@ -5,6 +5,8 @@ import type Chat from '@components/chat/chat';
 import IS_TOUCH_SUPPORTED from '@environment/touchSupport';
 import Button from '@components/button';
 import ButtonIcon from '@components/buttonIcon';
+import rootScope from '@lib/rootScope';
+import {lgText} from '@/luckgram/text';
 import CheckboxField from '@components/checkboxField';
 import showDeleteMessagesPopup from '@components/popups/deleteMessages';
 import {showSelectedMessagesReport} from '@components/popups/reportAd';
@@ -35,6 +37,10 @@ import {AppManagers, ReadingManagers} from '@lib/managers';
 import {attachContextMenuListener} from '@helpers/dom/attachContextMenuListener';
 import {Message} from '@layer';
 import {makeFullMid} from '@appManagers/utils/messages/fullMid';
+import {isFeatureEnabled} from '@/luckgram/core/features';
+import {SAVE_TO_SAVED} from '@/luckgram/actions/logic';
+import {deleteInBatches, forwardInBatches, isBulk} from '@/luckgram/actions/bulk';
+import {saveToSavedMessages} from '@/luckgram/actions/save';
 import flatten from '@helpers/array/flatten';
 import IS_STANDALONE from '@environment/standalone';
 import {toastNew} from '@components/toast';
@@ -62,6 +68,8 @@ export class AppSelection extends EventListenerBase<{
 }> {
   public selectedMids: Map<PeerId, Set<number>> = new Map();
   public isSelecting = false;
+  /** Luckgram (specs#190): "全选 … 的消息" made this selection — its copy is the texts alone */
+  public luckgramSelectAll = false;
   private selectionRoles = new WeakMap<HTMLElement, {role: string, tabIndex: string}>();
 
   public selectedText: string;
@@ -392,6 +400,7 @@ export class AppSelection extends EventListenerBase<{
   /** Drops everything the selection holds, out of wherever it is held */
   protected clearSelection() {
     this.selectedMids.clear();
+    this.luckgramSelectAll = false;
   }
 
   protected getElementsBetween(first: HTMLElement, last: HTMLElement) {
@@ -896,6 +905,8 @@ export default class ChatSelection extends AppSelection {
   public selectionSendNowBtn: HTMLElement;
   public selectionForwardBtn: HTMLElement;
   public selectionDeleteBtn: HTMLElement;
+  /** Luckgram (specs#190): "收藏", beside the forward button */
+  public luckgramSaveBtn: HTMLElement;
   public selectionReportBtn: HTMLElement;
 
   // * "select messages to report" mode (entered on MESSAGE_ID_REQUIRED):
@@ -1102,6 +1113,34 @@ export default class ChatSelection extends AppSelection {
     this.updateElementSelection(bubble, this.isMidSelected(peerId, mid));
   };
 
+  /**
+   * Luckgram (specs#190): many messages selected at once, whether they are on screen or not —
+   * "全选 … 的消息" as its pages come. Those on screen get their marks; the rest get theirs as
+   * they are drawn (`isElementShouldBeSelected`).
+   */
+  public luckgramSelectMids(peerId: PeerId, mids: number[], selectAll?: boolean) {
+    const added: number[] = [];
+    for(const mid of mids) {
+      if(this.isMidSelected(peerId, mid)) continue;
+      this.toggleMid(peerId, mid, false);
+      added.push(mid);
+    }
+
+    if(selectAll) this.luckgramSelectAll = true;
+    this.toggleSelection();
+    for(const mid of added) {
+      const bubble = this.bubbles.getBubble(makeFullMid(peerId, mid));
+      if(!bubble || !this.canSelectBubble(bubble)) continue;
+      this.toggleElementCheckbox(bubble, true);
+      const input = this.getCheckboxInputFromElement(bubble);
+      if(input) input.checked = true;
+      this.toggleElementSelected(bubble, true);
+    }
+
+    this.refreshSelectionGroup();
+    return this.updateContainer();
+  }
+
   public isElementShouldBeSelected(element: HTMLElement) {
     const isGrouped = element.classList.contains('is-grouped');
     return super.isElementShouldBeSelected(element) && (!isGrouped || this.isGroupedMidsSelected(element));
@@ -1275,13 +1314,17 @@ export default class ChatSelection extends AppSelection {
         // Left slot — delete.
         this.selectionDeleteBtn = ButtonIcon('delete danger selection-container-delete', {ariaLabel: 'Delete'});
         attachClickEvent(this.selectionDeleteBtn, () => {
+          const mids = this.getSelectedMids();
           showDeleteMessagesPopup(
             this.chat.peerId,
-            this.getSelectedMids(),
+            mids,
             this.chat.type,
             () => {
               this.cancelSelection();
-            }
+            },
+            undefined,
+            // * Luckgram (specs#190): more than 100 are deleted in batches, after one more confirmation
+            isBulk(mids.length) ? (options) => deleteInBatches({...options, onStart: () => this.cancelSelection()}) : undefined
           );
         }, attachClickOptions);
 
@@ -1302,10 +1345,33 @@ export default class ChatSelection extends AppSelection {
               obj[fromPeerId] = Array.from(mids).sort((a, b) => a - b);
             }
 
+            // * Luckgram (specs#190): more than 100 go in batches, one after another, with the progress told
+            if(isBulk(this.length())) {
+              forwardInBatches(obj, hotReloadGuard.showForwardPopup as any, () => this.cancelSelection());
+              return;
+            }
+
             hotReloadGuard.showForwardPopup(obj, () => {
               this.cancelSelection();
             });
           }, attachClickOptions);
+
+          // * Luckgram (specs#190): "收藏" — the selection forwarded to Saved Messages, beside the forward button
+          this.luckgramSaveBtn = ButtonIcon('savedmessages selection-container-forward luckgram-save-selected', {noRipple: true});
+          this.luckgramSaveBtn.title = lgText('收藏', 'Save');
+          this.luckgramSaveBtn.setAttribute('aria-label', lgText('收藏到我的收藏', 'Save to Saved Messages'));
+          attachClickEvent(this.luckgramSaveBtn, () => {
+            const selected = [...this.selectedMids].map(([fromPeerId, mids]): [PeerId, number[]] => [fromPeerId, [...mids]]);
+            const appImManager = hotReloadGuard.appImManager;
+            this.cancelSelection();
+            for(const [fromPeerId, mids] of selected) {
+              saveToSavedMessages(fromPeerId, mids, (lastMsgId) => appImManager.setInnerPeer({peerId: rootScope.myId, lastMsgId}));
+            }
+          }, attachClickOptions);
+          const both = document.createElement('div');
+          both.classList.add('luckgram-selection-right');
+          both.append(this.luckgramSaveBtn, rightButton);
+          rightButton = both;
         }
 
         this.selectionContainer = ChatInputPlate({
@@ -1342,6 +1408,9 @@ export default class ChatSelection extends AppSelection {
 
     this.selectionSendNowBtn?.toggleAttribute('disabled', cantSend);
     this.selectionForwardBtn?.toggleAttribute('disabled', cantForward);
+    // * Luckgram (specs#190): what cannot be forwarded cannot be saved; in Saved Messages it is saved already
+    this.luckgramSaveBtn?.toggleAttribute('disabled', cantForward);
+    this.luckgramSaveBtn?.classList.toggle('hide', !isFeatureEnabled(SAVE_TO_SAVED) || this.chat.peerId === rootScope.myId);
     this.selectionDeleteBtn?.toggleAttribute('disabled', cantDelete);
     this.selectionReportBtn?.toggleAttribute('disabled', !length);
   };
@@ -1356,6 +1425,7 @@ export default class ChatSelection extends AppSelection {
       this.selectionSendNowBtn =
       this.selectionForwardBtn =
       this.selectionDeleteBtn =
+      this.luckgramSaveBtn =
       this.selectionReportBtn =
       null;
     this.selectionContainerForReport = undefined;

@@ -74,6 +74,9 @@ import {canTranslateInBubble, getTranslateMenuText, toggleMessageTranslation} fr
 import {isFeatureEnabled} from '@/luckgram/core/features';
 import {lgText} from '@/luckgram/text';
 import {askAi, hasAskAiHandler} from '@/luckgram/assistant/askHook';
+import {SAVE_TO_SAVED, SELECT_ALL_FROM_SENDER, canSaveMessage, canSelectAllFrom} from '@/luckgram/actions/logic';
+import {saveToSavedMessages} from '@/luckgram/actions/save';
+import {getSelectAllLabel, getSelectionText, getSenderId, selectAllFromSender} from '@/luckgram/actions/selectAll';
 import {getMessageSourceText} from '@stores/peerLanguage';
 import {showAdReport, showMessageReport} from '@components/popups/reportAd';
 import showAboutAdPopup from '@components/popups/aboutAd';
@@ -1463,6 +1466,34 @@ export default class ChatContextMenu {
         (!this.message.pFlags.is_outgoing || this.message.fromId === SERVICE_PEER_ID) &&
         this.message._ !== 'messageService'
     }, {
+      // * Luckgram (specs#190): "收藏" — the message forwarded to Saved Messages in one press
+      icon: 'savedmessages',
+      regularText: lgText('收藏', 'Save'),
+      onClick: async() => {
+        const peerId = this.messagePeerId;
+        const mids = this.isTargetAGroupedItem ? [this.mid] : await this.chat.getMidsByMid(peerId, this.mid);
+        const appImManager = this.chat.appImManager;
+        saveToSavedMessages(peerId, mids, (lastMsgId) => appImManager.setInnerPeer({peerId: rootScope.myId, lastMsgId}));
+      },
+      verify: () => !this.chat.selection.isSelecting && canSaveMessage({
+        enabled: isFeatureEnabled(SAVE_TO_SAVED),
+        noForwards: this.noForwards || !!isAnchoredEphemeralMessage(this.message),
+        isSavedMessages: this.chat.peerId === rootScope.myId,
+        isScheduled: this.chat.type !== ChatType.Chat && this.chat.type !== ChatType.Discussion && this.chat.type !== ChatType.Pinned && this.chat.type !== ChatType.Search,
+        isService: this.message._ !== 'message',
+        isPending: !!this.message.pFlags.is_outgoing || !!(this.message as Message.message).error
+      })
+    }, {
+      icon: 'savedmessages',
+      regularText: lgText('收藏所选', 'Save selected'),
+      onClick: () => simulateClickEvent(this.chat.selection.luckgramSaveBtn),
+      verify: () => !!this.chat.selection.luckgramSaveBtn &&
+        this.isSelected &&
+        !this.chat.selection.luckgramSaveBtn.classList.contains('hide') &&
+        !this.chat.selection.luckgramSaveBtn.hasAttribute('disabled'),
+      notDirect: () => true,
+      withSelection: true
+    }, {
       icon: 'forward',
       text: 'Message.Context.Selection.Forward',
       onClick: this.onForwardClick,
@@ -1523,7 +1554,31 @@ export default class ChatContextMenu {
       verify: () => !this.isSelected && this.isSelectable,
       notDirect: () => true,
       withSelection: true
-    }, {
+    }, (() => {
+      // * Luckgram (specs#190): every message of this sender in the chat, read from the server as it goes
+      const item: ChatContextMenuButton = {
+        icon: 'select',
+        regularText: ' ',
+        onClick: () => {
+          selectAllFromSender(this.chat, this.message as Message.message);
+        },
+        verify: async() => {
+          const message = this.message as Message.message;
+          if(this.chat.selection.isSelecting || !this.isSelectable || !canSelectAllFrom({
+            enabled: isFeatureEnabled(SELECT_ALL_FROM_SENDER),
+            isChatView: this.chat.type === ChatType.Chat || this.chat.type === ChatType.Discussion,
+            isBroadcast: !!this.chat.isBroadcast,
+            isService: message?._ !== 'message',
+            senderId: message && getSenderId(this.chat, message)
+          })) return false;
+          // * the menu is built after this was asked, from `regularText`
+          item.regularText = await getSelectAllLabel(this.chat, message);
+          return true;
+        },
+        notDirect: () => true
+      };
+      return item;
+    })(), {
       icon: 'select',
       text: 'Message.Context.Selection.Clear',
       onClick: this.onClearSelectionClick,
@@ -2393,6 +2448,12 @@ export default class ChatContextMenu {
   private async getSelectedMessagesText() {
     if(this.avatarPeerId || !isSelectionEmpty()) {
       return;
+    }
+
+    // * Luckgram (specs#190): what "全选 … 的消息" selected is copied as its texts alone, an empty line between
+    if(this.chat.selection.isSelecting && this.chat.selection.luckgramSelectAll) {
+      const {text} = await getSelectionText(this.chat);
+      return text ? {text, html: undefined as string} : undefined;
     }
 
     let rawMessages: (Message.message | SponsoredMessage.sponsoredMessage)[];
