@@ -614,7 +614,9 @@ const SharedMedia: Component = () => {
 
     // * from the tab's own top: the sidebar stands at the page's padding, the profile popup lower
     const top = rect.top - tab.container.getBoundingClientRect().top - 1;
-    const isSharedMedia = top <= OFFSET;
+    // * Luckgram (specs#192): a panel without a profile is the saved things' own page whatever stands over its
+    // * tabs — the private note's card moved them down, and the title turned from "我的收藏" to "用户信息"
+    const isSharedMedia = tab.noProfile || top <= OFFSET;
     setIsSharedMedia(isSharedMedia);
     tab.searchSuper.updateScrollDateBadge(isSharedMedia);
   };
