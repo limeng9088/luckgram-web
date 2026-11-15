@@ -1281,7 +1281,10 @@ export default class ChatContextMenu {
           toggleMessageTranslation(this.chat.bubbles.getBubble(message.peerId, message.mid), message);
         },
         verify: () => {
-          if(this.selectedMessages || !canTranslateInBubble(this.message as Message.message, this.isTextSelected)) return false;
+          const message = this.message as Message.message;
+          // * (W6) a voice message that was transcribed is translated by its transcription: the bubble has it
+          const bubble = message && this.chat.bubbles.getBubble(message.peerId, message.mid);
+          if(this.selectedMessages || !canTranslateInBubble(message, this.isTextSelected, bubble)) return false;
           // * the menu is built after this was asked, from `regularText`
           item.regularText = getTranslateMenuText(this.message as Message.message);
           return true;

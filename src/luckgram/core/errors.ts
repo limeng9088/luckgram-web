@@ -17,6 +17,8 @@ export class LuckgramApiError extends Error {
   public static CREDITS_EXHAUSTED = 'credits_exhausted';
   // * the client's
   public static NETWORK_ERROR = 'network_error';
+  /** the server was reached and did not answer in the time the request gave it */
+  public static TIMEOUT = 'timeout';
   public static CONSENT_DENIED = 'consent_denied';
   public static CANCELLED = 'cancelled';
 
@@ -63,6 +65,8 @@ export function errorMessage(code: string): [string, string] {
       return ['请求太频繁，请稍后再试。', 'Too many requests. Please wait a moment and try again.'];
     case LuckgramApiError.NETWORK_ERROR:
       return ['网络错误，请检查网络后重试。', 'Network error. Please check your connection and try again.'];
+    case LuckgramApiError.TIMEOUT:
+      return ['AI 服务响应超时，请稍后重试。', 'The AI service took too long to answer. Please try again later.'];
     case LuckgramApiError.CONSENT_DENIED:
       return ['你没有同意使用 AI 服务。', 'You didn\'t allow the AI service.'];
     case LuckgramApiError.INPUT_TOO_LARGE:

@@ -490,9 +490,17 @@ body.has-auth-pages {
 
 // * "转写失败 · 重试", in the place of the transcription
 .luckgram-transcribe-retry {
+  // * the colour upstream gives its own error line: after a part that was transcribed, only this line has it
+  color: var(--message-primary-color);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+// * the part of a long recording that was transcribed before a piece failed: the retry line after it, on its own line
+.luckgram-transcribe-partial {
+  display: block;
+  margin-block-end: .25rem;
 }
 
 // * dictation: its button beside the emoji button, and the bar over the field while it listens

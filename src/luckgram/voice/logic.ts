@@ -14,6 +14,12 @@ export const DEFAULT_MAX_MB = 4;
 
 /** What the pieces are made of: speech needs no more, and a minute of it is under 2 MB */
 export const PIECE_SAMPLE_RATE = 16000;
+/** A recording longer than this is not sent as it is, whatever its size (3 minutes). */
+export const LONG_VOICE_SECONDS = 180;
+/** A piece of a recording that is cut: short enough for the server to answer well within a minute. */
+export const PIECE_MAX_SECONDS = 120;
+/** A file of unknown length is sent as it is only up to this size. */
+export const UNKNOWN_LENGTH_MAX_BYTES = 1024 * 1024;
 const WAV_HEADER_BYTES = 44;
 const BYTES_PER_SAMPLE = 2;
 
@@ -38,13 +44,19 @@ export function getBaseType(mimeType: string | undefined) {
  * the browser and sent as WAV pieces — a round video always is: it is a film, a minute of which is
  * larger than the limit, and only its sound is wanted.
  */
-export function shouldSendAsIs(mimeType: string | undefined, size: number, maxBytes: number) {
-  return DIRECT_TYPES.includes(getBaseType(mimeType)) && size > 0 && size <= maxBytes;
+export function shouldSendAsIs(mimeType: string | undefined, size: number, maxBytes: number, durationSeconds?: number) {
+  if(!DIRECT_TYPES.includes(getBaseType(mimeType)) || !(size > 0) || size > maxBytes) return false;
+  // * a long recording is small as a file (Opus: twenty minutes in 4 MB) but long to transcribe,
+  // * and the server has to answer a request within a minute: it is cut into pieces instead
+  if(durationSeconds > 0) return durationSeconds <= LONG_VOICE_SECONDS;
+  // * no length known (what was just recorded here): a file this big may be a long one
+  return size <= UNKNOWN_LENGTH_MAX_BYTES;
 }
 
-/** How many samples (16 kHz, mono, 16 bit) fit a piece. */
+/** How many samples (16 kHz, mono, 16 bit) fit a piece: what the size allows, two minutes at most. */
 export function getSamplesPerPiece(maxBytes: number) {
-  return Math.max(PIECE_SAMPLE_RATE, Math.floor((maxBytes - WAV_HEADER_BYTES) / BYTES_PER_SAMPLE));
+  const bySize = Math.max(PIECE_SAMPLE_RATE, Math.floor((maxBytes - WAV_HEADER_BYTES) / BYTES_PER_SAMPLE));
+  return Math.min(bySize, PIECE_MAX_SECONDS * PIECE_SAMPLE_RATE);
 }
 
 /** [start, end) of each piece. */
@@ -100,13 +112,14 @@ export function joinPieces(texts: string[]): string {
   return out;
 }
 
-export type VoiceFailure = 'network' | 'quota' | 'unsupported' | 'other';
+export type VoiceFailure = 'network' | 'quota' | 'unsupported' | 'timeout' | 'other';
 
 /** `code`: a LuckgramApiError's; `decodeFailed`: the browser could not read the recording's sound */
 export function getVoiceFailure(code: string | undefined, online: boolean, decodeFailed?: boolean): VoiceFailure {
   if(decodeFailed) return 'unsupported';
   if(code === 'quota_exceeded') return 'quota';
   if(code === 'network_error' || !online) return 'network';
+  if(code === 'timeout') return 'timeout';
   return 'other';
 }
 
@@ -117,6 +130,8 @@ export function getVoiceFailureText(failure: VoiceFailure): [string, string] {
       return ['网络不通，请检查网络或代理', 'No connection. Please check your network or proxy'];
     case 'quota':
       return ['今日转写时长已用完，明天再来', 'You\'ve used up today\'s transcription minutes. Come back tomorrow'];
+    case 'timeout':
+      return ['转写超时，请稍后重试', 'Transcription took too long. Please try again later'];
     case 'unsupported':
       return ['这个浏览器无法转写这条消息', 'This browser can\'t transcribe this message'];
     default:

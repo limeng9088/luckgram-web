@@ -7,14 +7,15 @@
 import App from '@config/app';
 import I18n from '@lib/langPack';
 import {LUCKGRAM_API_ENDPOINTS, LuckgramApi} from '@/luckgram/core/api';
+import {luckgramDeviceLocale} from '@/luckgram/text';
 
 const luckgramApi = new LuckgramApi({
   endpoints: LUCKGRAM_API_ENDPOINTS,
   appVersion: App.version,
   locale: () => {
-    const lang = I18n.getLastRequestedLangCode();
-    // * the server speaks the device's language: Chinese for a Chinese interface, the browser's otherwise
-    return lang && lang !== 'en' ? (/^zh/i.test(lang) ? 'zh-CN' : lang) : (navigator.language || 'en');
+    // * the server speaks the device's language, and writes Chinese in its script: the interface's
+    // * language as a tag ("zh-Hans", "zh-Hant"), the browser's while the interface is not chosen
+    return luckgramDeviceLocale(I18n.getLastRequestedLangCode(), navigator.language);
   }
 });
 
