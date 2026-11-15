@@ -636,7 +636,9 @@ export default class FiltersStorage extends AppManager {
   public async getDialogFilters(overwrite = false, fetched?: MessagesDialogFilters): Promise<MyDialogFilter[]> {
     // * Luckgram: keyword folders do not count as folders had from the server
     if(Object.keys(this.filters).filter((filterId) => !isLocalFolderId(+filterId)).length > PREPENDED_FILTERS && !overwrite) {
-      return this.getKeptFilters();
+      // * Luckgram: these are Telegram's folders, for everything that lists, counts or edits them; the keyword
+      // * folders are had from `luckgramGetKeywordFilters`
+      return this.getKeptFilters().filter((filter) => !isLocalFolderId(filter.id));
     }
 
     const messagesDialogFilters = fetched ?? await this.fetchDialogFilters();
@@ -651,7 +653,9 @@ export default class FiltersStorage extends AppManager {
    * and a folder made then could take the id of one of them
    */
   public getDialogFiltersToStart() {
-    return this.getDialogFilters().catch(() => this.getKeptFilters());
+    // * Luckgram: the keyword folders that are here already start with the rest, after them
+    return this.getDialogFilters().catch(() => this.getKeptFilters().filter((filter) => !isLocalFolderId(filter.id)))
+    .then((filters) => [...filters, ...this.luckgramGetKeywordFilters()]);
   }
 
   /** The folders as the server has them - and with them whether their tags are on */
@@ -882,6 +886,11 @@ export default class FiltersStorage extends AppManager {
     }
 
     return this.luckgramFolders.order;
+  }
+
+  /** The keyword folders as folders, in their order. */
+  public luckgramGetKeywordFilters(): MyDialogFilter[] {
+    return this.luckgramFolders.order.map((filterId) => this.filters[filterId]).filter(Boolean);
   }
 
   /** Every folder numbered anew: Telegram's as they stand, the keyword folders after them. */

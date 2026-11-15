@@ -2102,3 +2102,239 @@ body.luckgram-ai-open {
     }
   }
 }
+
+// ---------------------------------------------------------------- W12a: keyword folders (specs#191)
+
+.luckgram-folder-input {
+  display: block;
+  width: calc(100% - 1.5rem);
+  height: 2.75rem;
+  margin: .25rem .75rem .5rem;
+  padding: 0 .875rem;
+  border: 1px solid var(--border-color);
+  border-radius: .625rem;
+  outline: none;
+  background: none;
+  color: var(--primary-text-color);
+  font: inherit;
+
+  &:focus {
+    border-color: var(--primary-color);
+  }
+}
+
+.luckgram-folder-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .375rem;
+  padding: 0 .75rem;
+
+  &:not(:empty) {
+    margin-bottom: .5rem;
+  }
+}
+
+.luckgram-folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  max-width: 100%;
+  padding: .25rem .25rem .25rem .75rem;
+  border-radius: 1rem;
+  background: var(--light-primary-color, rgba(0, 0, 0, .08));
+  color: var(--primary-color);
+  line-height: 1.375rem;
+  overflow-wrap: anywhere;
+
+  &-remove {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: inherit;
+    font-size: .75rem;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--primary-color);
+      color: #fff;
+    }
+  }
+}
+
+.luckgram-folder-add {
+  display: flex;
+  align-items: center;
+  padding-inline-end: .75rem;
+
+  .luckgram-folder-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-inline-end: .5rem;
+    margin-block: 0;
+  }
+}
+
+.luckgram-folder-button {
+  flex: 0 0 auto;
+  padding: .5rem .875rem;
+  border: none;
+  border-radius: .625rem;
+  background: none;
+  color: var(--primary-color);
+  font: inherit;
+  font-weight: var(--font-weight-bold, 500);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--light-primary-color, rgba(0, 0, 0, .06));
+  }
+
+  &.is-primary {
+    background: var(--primary-color);
+    color: #fff;
+  }
+
+  &.is-danger {
+    color: var(--danger-color);
+  }
+
+  &:disabled {
+    opacity: .45;
+    cursor: default;
+  }
+}
+
+.luckgram-folder-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .25rem .75rem .625rem;
+}
+
+.luckgram-folder-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: .375rem;
+  height: 2.25rem;
+  padding: 0 .875rem 0 .625rem;
+  border: 1px solid var(--border-color);
+  border-radius: 1.125rem;
+  background: none;
+  color: var(--primary-text-color);
+  font: inherit;
+  cursor: pointer;
+
+  &-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    border: 1px solid var(--secondary-text-color);
+    border-radius: .25rem;
+    font-size: .75rem;
+    line-height: 1;
+  }
+
+  &.is-on {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+
+    .luckgram-folder-scope-mark {
+      border-color: var(--primary-color);
+      background: var(--primary-color);
+      color: #fff;
+    }
+  }
+}
+
+.luckgram-folder-row {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  margin: 0 .5rem;
+  padding: 0 .25rem 0 0;
+  border-radius: .625rem;
+
+  &:hover {
+    background: var(--light-secondary-text-color);
+  }
+
+  &-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 3.5rem;
+    padding: .375rem .75rem;
+    border: none;
+    background: none;
+    color: var(--primary-text-color);
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  &-title {
+    font-weight: var(--font-weight-bold, 500);
+    line-height: 1.375rem;
+  }
+
+  &-title,
+  &-keywords {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &-keywords {
+    color: var(--secondary-text-color);
+    font-size: .875rem;
+    line-height: 1.25rem;
+  }
+
+  &-moves {
+    flex: 0 0 auto;
+    display: flex;
+  }
+}
+
+.luckgram-folder-actions {
+  display: flex;
+  align-items: center;
+  padding: .25rem .75rem .5rem;
+}
+
+.luckgram-folder-space {
+  flex: 1 1 auto;
+}
+
+.luckgram-folder-move {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--secondary-text-color);
+  font: inherit;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--light-primary-color, rgba(0, 0, 0, .08));
+    color: var(--primary-color);
+  }
+
+  &:disabled {
+    opacity: .3;
+    cursor: default;
+  }
+}
+
+.luckgram-folder-new .row-title {
+  color: var(--primary-color);
+}

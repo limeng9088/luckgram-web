@@ -92,6 +92,13 @@ export const FEATURES: LuckgramFeature[] = [
     description: ['消息菜单里的「全选 … 的消息」：选中这个人在当前聊天里的全部消息，再复制、转发、收藏或删除', '"Select all messages from …" in a message\'s menu: every message of that sender in the chat, to copy, forward, save or delete']
   },
 
+  // ---- 发现 / Discover
+  {
+    key: 'keyword_folders', group: 'discover', default: true,
+    title: ['关键词文件夹', 'Keyword folders'],
+    description: ['用关键词建文件夹：最近消息里提到关键词的聊天自动归进来。在「设置 → 聊天文件夹」里新建', 'Folders made of keywords: chats whose latest messages mention one come in by themselves. Made in Settings → Chat Folders']
+  },
+
   // ---- 资料 / Profiles
   {
     key: 'user_notes', group: 'profiles', default: true,

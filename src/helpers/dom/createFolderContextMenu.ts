@@ -7,6 +7,8 @@ import {FOLDER_ID_ALL, REAL_FOLDERS} from '@appManagers/constants';
 import createContextMenu from '@helpers/dom/createContextMenu';
 import findUpClassName from '@helpers/dom/findUpClassName';
 import useChatListUnreadOnly from '@stores/chatListUnreadOnly';
+import {isLocalFolderId} from '@/luckgram/folders/guard';
+import {editKeywordFolder, removeKeywordFolder} from '@/luckgram/folders/hooks';
 
 export default function createFolderContextMenu({
   appSidebarLeft,
@@ -27,6 +29,12 @@ export default function createFolderContextMenu({
 }) {
   async function openSettingsForFilter(filterId: number) {
     if(REAL_FOLDERS.has(filterId)) return;
+    // * Luckgram (specs#191): a keyword folder has its own page; upstream's would save it to Telegram
+    if(isLocalFolderId(filterId)) {
+      editKeywordFolder(filterId);
+      return;
+    }
+
     const filter = await managers.filtersStorage.getFilter(filterId);
 
     appSidebarLeft.closeTabsBefore(() => {
@@ -82,6 +90,12 @@ export default function createFolderContextMenu({
       className: 'danger',
       text: 'Delete',
       onClick: () => {
+        // * Luckgram (specs#191): a keyword folder is deleted here, on this device alone
+        if(isLocalFolderId(clickFilterId)) {
+          removeKeywordFolder(clickFilterId);
+          return;
+        }
+
         _AppEditFolderTab.deleteFolder(clickFilterId);
       },
       verify: () => clickFilterId !== FOLDER_ID_ALL

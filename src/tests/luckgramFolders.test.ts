@@ -1,6 +1,8 @@
 // * Luckgram Web (luckgram-specs#191, W12): keyword folders — the rules, and the last line before Telegram
 
 import {LOCAL_FOLDER_ID_START, guardFolderRequest, isLocalFolderId} from '@/luckgram/folders/guard';
+import {LuckgramMemoryStorage} from '@/luckgram/core/storage';
+import {FoldersStore} from '@/luckgram/folders/store';
 import {
   FoldersState, MAX_FOLDERS, addFolder, checkFolder, editFolder, findHit, isInScope, makeMatcher, nextFolderId, normalizeKeywords, normalizeScopes,
   removeFolder, reorderFolders, sanitizeFolders, splitFolderOrder
@@ -181,5 +183,60 @@ describe('luckgram keyword folders: which chats', () => {
     for(let chat = 0; chat < 1000; ++chat) findHit(matcher, texts);
     // * 1000 chats of 50 messages each, none matching (the worst case): well under a frame budget's hundredfold
     expect(performance.now() - start).toBeLessThan(1500);
+  });
+});
+
+describe('luckgram keyword folders: the store', () => {
+  const make = async(storage = new LuckgramMemoryStorage()) => {
+    const store = new FoldersStore(storage);
+    await store.ready;
+    return {store, storage};
+  };
+
+  test('kept by account, with ids of the local range; there again after a reload', async() => {
+    const {store, storage} = await make();
+    const added = store.add(1, {title: '发票', keywords: ['发票', 'invoice']});
+    expect(typeof added).toBe('object');
+    expect((added as any).id).toBe(L);
+    store.add(1, {title: 'Work', keywords: ['deadline'], scopes: ['groups']});
+    store.add(2, {title: 'Other', keywords: ['x']});
+    expect(store.list(1).map((folder) => folder.id)).toEqual([L, L + 1]);
+    expect(store.list(2).map((folder) => folder.id)).toEqual([L]);
+    expect(Object.keys(await storage.getAll('folders')).sort()).toEqual(['f:1', 'f:2']);
+
+    const again = new FoldersStore(storage);
+    await again.ready;
+    expect(again.list(1).map((folder) => folder.title)).toEqual(['发票', 'Work']);
+    expect(again.get(1, L + 1).scopes).toEqual(['groups']);
+  });
+
+  test('what cannot be a folder is refused and says why; the 11th too', async() => {
+    const {store} = await make();
+    expect(store.add(1, {title: '', keywords: ['x']})).toBe('no_title');
+    expect(store.add(1, {title: 'a', keywords: []})).toBe('no_keywords');
+    for(let i = 0; i < MAX_FOLDERS; ++i) expect(typeof store.add(1, {title: 'f' + i, keywords: ['k']})).toBe('object');
+    expect(store.add(1, {title: 'one more', keywords: ['k']})).toBe('limit');
+    expect(store.edit(1, L, {title: 'renamed', keywords: ['k2']})).toBeUndefined();
+    expect(store.edit(1, L, {title: '', keywords: ['k2']})).toBe('no_title');
+    expect(store.get(1, L).title).toBe('renamed');
+  });
+
+  test('listeners hear of changes — a reorder that changes nothing is not one; an account that leaves takes its folders', async() => {
+    const {store, storage} = await make();
+    const heard: string[] = [];
+    store.subscribe((account) => heard.push(account));
+    store.add(1, {title: 'a', keywords: ['x']});
+    store.add(1, {title: 'b', keywords: ['y']});
+    await store.reorder(1, [L, L + 1]);
+    await store.reorder(1, [L + 1, L]);
+    await store.remove(1, L);
+    expect(heard).toEqual(['1', '1', '1', '1']);
+    expect(store.list(1).map((folder) => folder.id)).toEqual([L + 1]);
+
+    store.add(2, {title: 'c', keywords: ['z']});
+    store.add(3, {title: 'd', keywords: ['z']});
+    await store.deleteAccount(1);
+    await store.cleanOrphans([3]);
+    expect(Object.keys(await storage.getAll('folders'))).toEqual(['f:3']);
   });
 });

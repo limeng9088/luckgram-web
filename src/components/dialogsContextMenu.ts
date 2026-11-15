@@ -1,4 +1,5 @@
 import type {Dialog} from '@appManagers/appMessagesManager';
+import {isLocalFolderId} from '@/luckgram/folders/guard';
 import type {ForumTopic} from '@layer';
 import type {AnyDialog} from '@lib/storages/dialogs';
 import {findDialogListElement} from '@components/dialogElement';
@@ -289,6 +290,11 @@ export default class DialogsContextMenu {
           return false;
         }
 
+        // * Luckgram (specs#191): a keyword folder has no pins of its own (they would be an edit of a folder)
+        if(isLocalFolderId(this.filterId)) {
+          return false;
+        }
+
         const isPinned = this.filterId !== undefined && this.filterId > 1 ?
           (await this.managers.appMessagesManager.getFilter(this.filterId)).pinnedPeerIds.includes(this.dialog.peerId) :
           !!this.dialog.pFlags?.pinned;
@@ -311,6 +317,11 @@ export default class DialogsContextMenu {
         }
 
         if(this.threadId && !this.canManageTopics) {
+          return false;
+        }
+
+        // * Luckgram (specs#191): a keyword folder has no pins of its own (they would be an edit of a folder)
+        if(isLocalFolderId(this.filterId)) {
           return false;
         }
 

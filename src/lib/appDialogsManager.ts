@@ -1,4 +1,6 @@
 import type {MyDialogFilter} from '@lib/storages/filters';
+import {isLocalFolderId} from '@/luckgram/folders/guard';
+import {editKeywordFolder} from '@/luckgram/folders/hooks';
 import type {Dialog, ForumTopic, MyMessage, RequestHistoryOptions, SavedDialog} from '@appManagers/appMessagesManager';
 import type {MyDocument} from '@appManagers/appDocsManager';
 import type {State} from '@config/state';
@@ -1495,6 +1497,12 @@ export class AppDialogsManager {
       });
 
       attachClickEvent(button, isUnread ? () => this.showAllChatsFrom(button) : async() => {
+        // * Luckgram (specs#191): a keyword folder has its own page
+        if(isLocalFolderId(this.filterId)) {
+          editKeywordFolder(this.filterId);
+          return;
+        }
+
         const filter = await this.managers.filtersStorage.getFilter(this.filterId);
         appSidebarLeft.createTab(AppEditFolderTab).open({...AppEditFolderTab.getInitArgs(), initFilter: filter});
       });

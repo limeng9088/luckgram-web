@@ -187,6 +187,25 @@ export class AppSidebarLeft extends SidebarSlider {
       getFilterId: () => appDialogsManager.filterId,
       createButton: (className) => ButtonIcon(className, {noRipple: true})
     })).catch(noop);
+    // * Luckgram (W12): keyword folders go to the worker's folders as the account is known; their page opens here
+    import('@/luckgram/folders/instance').then(({startKeywordFolders, confirmRemoveKeywordFolder}) => {
+      startKeywordFolders();
+      return import('@/luckgram/folders/hooks').then(({setKeywordFolderActions}) => setKeywordFolderActions({
+        edit: async(id) => {
+          const [{LuckgramSubpageTab}, {setEditedKeywordFolder}] = await Promise.all([import('@/luckgram/ui/tabs'), import('@/luckgram/folders/editTab')]);
+          setEditedKeywordFolder(id);
+          if(mediaSizes.isMobile) appImManager.selectTab(APP_TABS.CHATLIST);
+          this.createTab(LuckgramSubpageTab).open({feature: {
+            key: 'keyword_folder_edit', group: 'discover', default: true,
+            title: id === undefined ? ['新建关键词文件夹', 'New keyword folder'] : ['关键词文件夹', 'Keyword folder'], description: ['', ''],
+            subpage: () => import('@/luckgram/folders/editTab')
+          }});
+        },
+        remove: (id) => {
+          confirmRemoveKeywordFolder(id);
+        }
+      }));
+    }).catch(noop);
     // * Luckgram (W11): "管理" of the field's quick replies opens their page here
     import('@/luckgram/replies/openManage').then(({setRepliesManagerOpener}) => setRepliesManagerOpener(async() => {
       const {LuckgramSubpageTab} = await import('@/luckgram/ui/tabs');

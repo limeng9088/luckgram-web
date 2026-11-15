@@ -28,7 +28,7 @@ function makeStorage(cloudIds: number[] = [5, 7]) {
 
   const storage: any = new (FiltersStorage as any)();
   storage.rootScope = {dispatchEvent: (name: string, value: any) => events.push([name, value]), addEventListener: () => {}};
-  storage.appStateManager = {pushToState: (_key: string, value: any[]) => states.push(value.map((filter) => filter.id)), getState: async() => ({filtersArr: []})};
+  storage.appStateManager = {pushToState: (_key: string, value: any[]) => states.push(value.map((filter) => filter.id)), getState: async() => ({filtersArr: [] as any[]})};
   storage.apiManager = {
     invokeApi: vi.fn((method: string, params: any) => {
       requests.push([method, params]);
