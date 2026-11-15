@@ -16,6 +16,7 @@ import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {isFeatureEnabled} from '@/luckgram/core/features';
 import {watchFeatures} from '@/luckgram/core/hooks';
 import {lgText} from '@/luckgram/text';
+import {holdEscape} from '@/luckgram/core/escape';
 import {AI_WRITING} from '@/luckgram/writing/logic';
 import {NARROW_QUERY, isNarrowWindow} from '@/luckgram/writing/narrow';
 import {registerAiMenuItem} from '@/luckgram/writing/registry';
@@ -46,6 +47,7 @@ export default class LuckgramQuickReplies {
   private button: HTMLElement;
   private menu: HTMLElement;
   private slashHelper: RepliesSlashHelper;
+  private commandsHelper: AutocompleteHelper;
   private closeMenuListeners: () => void;
 
   // * `input`: upstream's ChatInput (typed loosely: this file is imported by it)
@@ -158,17 +160,12 @@ export default class LuckgramQuickReplies {
       const target = e.target as Node;
       if(!menu.contains(target) && !this.button?.contains(target)) this.closeMenu();
     };
-    const onKey = (e: KeyboardEvent) => {
-      if(e.key === 'Escape') {
-        e.stopPropagation();
-        this.closeMenu();
-      }
-    };
+    // * Esc closes the list and nothing behind it (upstream takes the key first and would close the chat)
+    const releaseEscape = holdEscape(() => this.closeMenu());
     document.addEventListener('pointerdown', onDown, true);
-    document.addEventListener('keydown', onKey, true);
     this.closeMenuListeners = () => {
       document.removeEventListener('pointerdown', onDown, true);
-      document.removeEventListener('keydown', onKey, true);
+      releaseEscape();
     };
   }
 
@@ -251,6 +248,7 @@ export default class LuckgramQuickReplies {
       const length = (this.input.messageInputField?.value ?? '').length;
       this.input.messageInputEditor.replaceTextRange(0, length, reply.text);
     });
+    this.commandsHelper = commandsHelper;
     if(commandsHelper) this.slashHelper.addSibling(commandsHelper);
   }
 
@@ -263,5 +261,28 @@ export default class LuckgramQuickReplies {
     // * only while the caret is at the end of a field that holds nothing but the "/…"
     const found = this.isOn && value === wholeValue ? matchSlash(value, this.getItems()) : undefined;
     return this.slashHelper.show(found) ? this.slashHelper : undefined;
+  }
+
+  /**
+   * Enter on a "/…" that asks for a template (input.ts, before it sends). The suggestions take the
+   * key themselves once they are up, but they come a moment after the typing, and Enter in that
+   * moment sent the "/…" as it stood. The same templates are found here at once, from the
+   * account's own list: the first takes the field's place, as its suggestion would, and nothing
+   * is sent. Where a bot's commands are suggested for this text, the key is theirs.
+   * @returns whether the key was taken
+   */
+  public takeEnter(): boolean {
+    try {
+      if(!this.slashHelper || !this.isOn) return false;
+      if(this.commandsHelper && (this.commandsHelper as any).hidden === false) return false;
+      const value: string = this.input.messageInputField?.value ?? '';
+      const found = matchSlash(value, this.getItems());
+      if(!found) return false;
+      this.input.messageInputEditor.replaceTextRange(0, value.length, found[0].text);
+      return true;
+    } catch(err) {
+      console.warn('[luckgram] quick replies: Enter', (err as Error)?.message);
+      return false;
+    }
   }
 }

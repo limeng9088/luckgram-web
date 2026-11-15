@@ -87,6 +87,34 @@ describe('luckgram actions: reading all of a sender\'s messages', () => {
     expect(asked.length).toBe(2);
   });
 
+  test('read from the whole history: a page with none of the sender\'s is not the end', async() => {
+    // * 250 messages, the sender's are the odd ones of the oldest 50 only
+    const asked: number[] = [];
+    const loadPage = async(offsetId: number) => {
+      asked.push(offsetId);
+      const from = offsetId ? offsetId - 1 : 250;
+      const raw: number[] = [];
+      for(let mid = from; mid > Math.max(0, from - 100); --mid) raw.push(mid);
+      return {mids: raw.filter((mid) => mid <= 50 && mid % 2 === 1), end: !raw.length || raw[raw.length - 1] === 1, next: raw.length ? Math.min(...raw) : undefined};
+    };
+
+    const totals: number[] = [];
+    const result = await collectSenderMessages({loadPage, onPage: (_mids, total) => totals.push(total)});
+    expect(result).toEqual({total: 25, cancelled: false});
+    expect(asked).toEqual([0, 151, 51]);
+    expect(totals).toEqual([25]);
+  });
+
+  test('read from the whole history: a page that goes no further back stops it', async() => {
+    let calls = 0;
+    const result = await collectSenderMessages({
+      loadPage: async() => (++calls, {mids: [], end: false, next: 40}),
+      onPage: () => {}
+    });
+    expect(result.total).toBe(0);
+    expect(calls).toBe(2);
+  });
+
   test('a server that repeats itself does not keep it going', async() => {
     let calls = 0;
     const result = await collectSenderMessages({
