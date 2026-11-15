@@ -39,6 +39,39 @@ export function isLuckgramChinese() {
 }
 
 /**
+ * The script Chinese is written in for this interface: "Hans" for Simplified, "Hant" for
+ * Traditional; nothing for an interface in another language. `langCode` is the pack's code
+ * ("zh-hans-raw", "zh-hant-raw"), or the browser's language where the browser decides.
+ */
+export function chineseScriptOf(langCode: string | undefined): 'Hans' | 'Hant' | undefined {
+  if(!/^zh\b/i.test(langCode || '')) return;
+  return /\b(hant|tw|hk|mo)\b/i.test(langCode) ? 'Hant' : 'Hans';
+}
+
+/** The script of this interface's Chinese, if it is Chinese (see chineseScriptOf). */
+export function luckgramChineseScript(): 'Hans' | 'Hant' | undefined {
+  if(!isLuckgramChinese()) return;
+  if(/^zh\b/i.test(appLangCode || '')) return chineseScriptOf(appLangCode);
+  const languages = navigator.languages?.length ? navigator.languages : [navigator.language];
+  return chineseScriptOf(languages[0]) || 'Hans';
+}
+
+/**
+ * The locale a device is registered with: the interface's language as a BCP 47 tag ("zh-Hans",
+ * "zh-Hant", "pt-BR" — the same the document's `lang` gets); the browser's while the interface
+ * is still the bundled English.
+ */
+export function luckgramDeviceLocale(langCode: string | undefined, browserLanguage: string | undefined): string {
+  if(langCode && langCode !== 'en') {
+    const tag = luckgramHtmlLang(langCode);
+    // * a bare "zh" says nothing of the script, and the server goes by it (transcriptions)
+    return tag === 'zh' ? 'zh-Hans' : tag;
+  }
+
+  return browserLanguage || 'en';
+}
+
+/**
  * The locale to count plurals by: Telegram's pack codes are not all language tags a browser knows
  * ("zh-hans-raw" is refused, and upstream logs an error before it falls back to "zh").
  */

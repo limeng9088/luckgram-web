@@ -459,7 +459,7 @@ describe('luckgram API client', () => {
       const {api, calls, settings} = await setup(slow(28000, () => json(200, {text: '你好'})));
       await settings.setPrivate('device_token', 'tok-1');
       let settled = false;
-      const result = api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 120000});
+      const result = api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 55000});
       result.then(() => settled = true, () => settled = true);
       await vi.advanceTimersByTimeAsync(27000);
       expect(settled).toBe(false);
@@ -472,10 +472,10 @@ describe('luckgram API client', () => {
     test('a long request out of time fails, and is not sent to another entry: the work may be done', async() => {
       const {api, calls, settings} = await setup(slow(600000, () => json(200, {text: 'late'})));
       await settings.setPrivate('device_token', 'tok-1');
-      const result = api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 120000});
+      const result = api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 55000});
       const caught = result.catch((err) => err);
-      await vi.advanceTimersByTimeAsync(120000);
-      expect(await caught).toMatchObject({code: 'network_error'});
+      await vi.advanceTimersByTimeAsync(55000);
+      expect(await caught).toMatchObject({code: 'timeout'});
       expect(calls.map((call) => call.url)).toEqual([MAIN + '/v1/ai/transcribe']);
     });
 
@@ -485,7 +485,7 @@ describe('luckgram API client', () => {
         return json(200, {text: 'ok'});
       });
       await settings.setPrivate('device_token', 'tok-1');
-      expect(await api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 120000})).toEqual({text: 'ok'});
+      expect(await api.requestJSON({path: '/v1/ai/transcribe', body: new Blob(['x']), contentType: 'audio/ogg', timeoutMs: 55000})).toEqual({text: 'ok'});
       expect(calls.filter((call) => !call.url.endsWith('/v1/health')).length).toBe(2);
     });
   });
@@ -658,6 +658,14 @@ describe('luckgram AI client', () => {
     expect(await ai.transcribe(audio, {language: 'ZH'})).toEqual({text: '你好', language: 'zh'});
     expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe?language=zh');
     expect(bodies[bodies.length - 1]).toBe(audio);
+
+    // * the script of a Chinese result: Simplified or Traditional, nothing else
+    await ai.transcribe(audio, {script: 'Hans'});
+    expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe?script=Hans');
+    await ai.transcribe(audio, {language: 'zh', script: 'Hant'});
+    expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe?language=zh&script=Hant');
+    await ai.transcribe(audio, {script: 'Latn' as any});
+    expect(urls[urls.length - 1]).toBe(MAIN + '/v1/ai/transcribe');
 
     const before = urls.length;
     await expect(ai.transcribe(new Blob(['x'], {type: 'video/mp4'}))).rejects.toMatchObject({code: 'invalid_request'});

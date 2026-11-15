@@ -23,11 +23,15 @@ import {createSseParser} from '@/luckgram/core/sse';
 
 export const KEY_AI_CONSENT = 'ai_consent';
 /**
- * How long an AI request may take to answer. A transcription and a picture answer only when the
- * work is done (the response's headers come with the result), an answer that is written piece by
- * piece when the model starts; the time an entry gets to be reached (10 s) cut them all short.
+ * How long an AI request may take to answer (to the response's headers). A transcription and a
+ * picture answer only when the work is done, an answer that is written piece by piece when the
+ * model starts; the time an entry gets to be reached (10 s) cut them all short.
+ *
+ * Under the 60 s the server's front (CloudFront) gives its origin: past that the answer is lost
+ * anyway, so the request fails here first, saying it took too long. What would take the server
+ * longer is cut into pieces before it is sent (voice/logic.ts: shouldSendAsIs).
  */
-export const AI_TIMEOUT_MS = 120000;
+export const AI_TIMEOUT_MS = 55000;
 
 export type AiTask = 'chat' | 'summary' | 'reply' | 'writing' | 'agent' | 'post' | 'translate';
 export type AiMessage = {role: 'system' | 'user' | 'assistant', content: string};
@@ -167,13 +171,20 @@ export class LuckgramAI {
     });
   }
 
-  /** @param audio the audio file as it is; its type has to be one of TRANSCRIBE_TYPES */
-  public transcribe(audio: Blob, options: {language?: string, signal?: AbortSignal} = {}): Promise<AiTranscription> {
+  /**
+   * @param audio the audio file as it is; its type has to be one of TRANSCRIBE_TYPES
+   * @param options.script "Hans" or "Hant": how a Chinese result is to be written
+   */
+  public transcribe(audio: Blob, options: {language?: string, script?: 'Hans' | 'Hant', signal?: AbortSignal} = {}): Promise<AiTranscription> {
     return this.withConsent(async() => {
       const type = (audio.type || '').split(';')[0].trim().toLowerCase();
       if(!TRANSCRIBE_TYPES.includes(type)) throw new LuckgramApiError(LuckgramApiError.INVALID_REQUEST);
 
-      const language = options.language && /^[a-z]{2}$/i.test(options.language) ? `?language=${options.language.toLowerCase()}` : '';
+      const query = new URLSearchParams();
+      if(options.language && /^[a-z]{2}$/i.test(options.language)) query.set('language', options.language.toLowerCase());
+      // * the script a Chinese result is written in (the model gives Traditional for Mandarin as often as not)
+      if(options.script === 'Hans' || options.script === 'Hant') query.set('script', options.script);
+      const language = query.toString() ? '?' + query.toString() : '';
       const data = await this.api.requestJSON<AiTranscription>({
         path: '/v1/ai/transcribe' + language, body: audio, contentType: type, signal: options.signal,
         // * the server answers when the whole recording is transcribed: that takes as long as it takes

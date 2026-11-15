@@ -155,7 +155,7 @@ export class LuckgramApi {
         if(request.signal?.aborted && !timedOut) throw new LuckgramApiError(LuckgramApiError.CANCELLED);
         // * a long request that ran out of time is not an entry that cannot be reached: an entry that
         // * cannot fails at once (DNS, connection, TLS). Sent again elsewhere, the work would be done twice
-        if(timedOut && isLong) throw new LuckgramApiError(LuckgramApiError.NETWORK_ERROR);
+        if(timedOut && isLong) throw new LuckgramApiError(LuckgramApiError.TIMEOUT);
         // * the entry could not be reached (DNS, connection, TLS, no answer in time): the next one
       } finally {
         clearTimeout(timeout);
