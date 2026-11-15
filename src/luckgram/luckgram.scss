@@ -2434,8 +2434,9 @@ body.luckgram-ai-open {
   background: var(--light-primary-color, rgba(51, 144, 236, .18));
   color: var(--primary-color);
 
-  // * the row on screen is primary-coloured itself
-  .active & {
+  // * the chat that is open: its row is primary-coloured itself. The row's own class — the list's page
+  // * and tab above it carry `active` too, and with `.active` alone every row took this look
+  .chatlist-chat.active & {
     background: rgba(255, 255, 255, .25);
     color: inherit;
   }
