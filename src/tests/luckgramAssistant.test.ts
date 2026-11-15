@@ -6,7 +6,7 @@ import {IDBFactory} from 'fake-indexeddb';
 import {LuckgramIndexedDBStorage, LuckgramMemoryStorage} from '@/luckgram/core/storage';
 import {AssistantStore} from '@/luckgram/assistant/store';
 import {
-  AI_HASH, ASK_FILE_MAX_BYTES, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, canReadFile, composeAskText, isTextFile, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
+  AI_HASH, ASK_FILE_MAX_BYTES, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, canReadFile, composeAsk, composeAskText, getAskCutText, isTextFile, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
   getConversationsToPrune, getOrphanKeys, makeId, makeTitle, markdownToEntities, newConversation, prepareMarkdown, sortConversations
 } from '@/luckgram/assistant/logic';
 import {
@@ -335,6 +335,29 @@ describe('luckgram assistant: "问 AI"', () => {
     // * no room worth using: the name alone
     expect(composeAskText({text: 'y'.repeat(700), fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000)).toBe('y'.repeat(700) + '\n\n[big.log]\n\n');
     expect(composeAskText({text: 'z'.repeat(3000)}, 1000).length).toBe(1002);
+  });
+
+  test('what was cut is said in words, not by the "…" alone (specs#188)', () => {
+    // * nothing cut: nothing said
+    expect(composeAsk({text: '短', fileName: 'a.txt', fileContent: '内容'}).cut).toBeUndefined();
+    expect(getAskCutText(undefined)).toBeUndefined();
+
+    // * a long file: how much of it is there
+    const file = composeAsk({text: '总结这个文件', fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000);
+    expect(file.cut).toEqual({kept: 1000 - '总结这个文件'.length - '[big.log]'.length - 200, of: 'file'});
+    expect(file.text.split('x').length - 1).toBe(file.cut.kept);
+    expect(getAskCutText(file.cut)[0]).toBe(`文件内容较长，已截取前 ${file.cut.kept} 字`);
+
+    // * no room for the file's content at all
+    const none = composeAsk({text: 'y'.repeat(700), fileName: 'big.log', fileContent: 'x'.repeat(5000)}, 1000);
+    expect(none.cut).toEqual({fileLeftOut: true});
+    expect(getAskCutText(none.cut)[0]).toBe('内容较长，没有带上文件内容');
+
+    // * the message itself is too long
+    const all = composeAsk({text: 'z'.repeat(3000)}, 1000);
+    expect(all.cut).toEqual({kept: 999, of: 'all'});
+    expect(getAskCutText(all.cut)[0]).toBe('内容较长，已截取前 999 字');
+    expect(all.text).toBe('z'.repeat(999) + '…\n\n');
   });
 });
 
