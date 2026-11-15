@@ -6,6 +6,7 @@
 
 import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {lgText} from '@/luckgram/text';
+import {holdEscape} from '@/luckgram/core/escape';
 import {MAX_LENGTH, NotePeer, normalizeNote, remainingCharacters} from '@/luckgram/notes/logic';
 import type {NotesStore} from '@/luckgram/notes/store';
 
@@ -56,6 +57,7 @@ export function openNoteEditor(options: {store: NotesStore, account: string, pee
     if(closed) return;
     closed = true;
     document.removeEventListener('keydown', onKeyDown, true);
+    releaseEscape();
     backdrop.remove();
     if(open === handle) open = undefined;
     options.onClose?.();
@@ -88,11 +90,7 @@ export function openNoteEditor(options: {store: NotesStore, account: string, pee
 
   field.addEventListener('input', update);
   function onKeyDown(e: KeyboardEvent) {
-    if(e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      close();
-    } else if(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !saveButton.disabled) {
+    if(e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !saveButton.disabled) {
       e.preventDefault();
       e.stopPropagation();
       save();
@@ -100,6 +98,8 @@ export function openNoteEditor(options: {store: NotesStore, account: string, pee
   }
 
   document.addEventListener('keydown', onKeyDown, true);
+  // * Esc closes the editor and nothing behind it (upstream takes the key first and would close the chat)
+  const releaseEscape = holdEscape(close);
   attachClickEvent(backdrop, (e) => {
     // * a press outside closes only what was not changed: a slip must not lose the text
     if(e.target === backdrop && normalizeNote(field.value) === before) close();

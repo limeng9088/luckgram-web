@@ -5,6 +5,9 @@
  */
 
 import {JSX, Show, createMemo} from 'solid-js';
+import {resolveFirst} from '@solid-primitives/refs';
+import Section from '@components/section';
+import type SolidJSHotReloadGuardProvider from '@lib/solidjs/hotReloadGuardProvider';
 import Row from '@components/rowTsx';
 import {copyTextToClipboard} from '@helpers/clipboard';
 import {toastNew} from '@components/toast';
@@ -62,4 +65,29 @@ export default function LuckgramNoteRow(props: {peerId: PeerId, isChannel: boole
       </Row>
     </Show>
   );
+}
+
+/**
+ * The row for Saved Messages' panel: upstream draws no profile there (only the tabs of what was
+ * saved), so the row comes in a card of its own over the tabs. Nothing while the feature is off.
+ */
+export function renderSavedNoteSection(peerId: PeerId, HotReloadGuardProvider: typeof SolidJSHotReloadGuardProvider) {
+  const Card = () => {
+    const enabled = useFeatureEnabled(USER_NOTES);
+    return (
+      <div class="luckgram-note-saved" classList={{hide: !enabled()}}>
+        <Section noDelimiter>
+          <LuckgramNoteRow peerId={peerId} isChannel={false} />
+        </Section>
+      </div>
+    );
+  };
+
+  const ret = (
+    <HotReloadGuardProvider>
+      <Card />
+    </HotReloadGuardProvider>
+  );
+
+  return resolveFirst(() => ret)() as HTMLElement;
 }
