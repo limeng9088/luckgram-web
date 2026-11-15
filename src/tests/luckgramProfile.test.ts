@@ -53,11 +53,16 @@ describe('luckgram profile: the registration month', () => {
     expect(estimateRegistration(points, 199)).toEqual({year: 2019, month: 6});
   });
 
-  test('under the first row: before 2014; over the last, or without a table: nothing', () => {
+  test('under the first row: before 2014; from the last row on: its month "or later"; without a table: nothing', () => {
     expect(estimateRegistration(table, 1000)).toEqual({before2014: true});
     expect(estimateRegistration(table, 2768409)).toEqual({before2014: true}); // 2013-11
-    expect(estimateRegistration(table, 9000000000)).toBeUndefined();
-    expect(estimateRegistration(table, 8700161147)).toBeUndefined();
+    // * newer than the table knows (specs#192: the row was missing for id 8762883456): not guessed, not hidden
+    expect(estimateRegistration(table, 8762883456)).toEqual({year: 2026, month: 1, after: true});
+    expect(estimateRegistration(table, 9000000000)).toEqual({year: 2026, month: 1, after: true});
+    expect(estimateRegistration(table, 8700161147)).toEqual({year: 2026, month: 1, after: true});
+    // * the id just under the last row is still between two rows
+    expect(estimateRegistration(table, 8700161146)).toEqual({year: 2025, month: 12});
+    expect(formatEstimate({year: 2026, month: 1, after: true})).toEqual(['约 2026 年 1 月之后', 'about Jan 2026 or later']);
     expect(estimateRegistration([], 5)).toBeUndefined();
     expect(estimateRegistration(table, 0)).toBeUndefined();
     expect(estimateRegistration(table, -5)).toBeUndefined();
