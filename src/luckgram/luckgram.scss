@@ -1487,8 +1487,20 @@ body.luckgram-ai-open {
   font-weight: var(--font-weight-bold, 500);
 }
 
+// * "停止", under the points while they are being written
+.luckgram-summary-stop {
+  margin-top: .375rem;
+}
+
 .luckgram-summary-answer {
   white-space: pre-wrap;
+
+  // * Markdown's own blocks (a block of code, a table) inside an answer
+  pre {
+    margin: .25rem 0;
+    white-space: pre;
+    overflow-x: auto;
+  }
 
   &.is-error {
     color: var(--danger-color);

@@ -110,13 +110,23 @@ export async function loadSummaryLines(
   const me = lgText('我', 'Me');
   const lines: SummaryLine[] = [];
   let lastGroup: string;
-  for(const mid of mids.reverse()) {
-    let message = chat.getMessageByPeer(peerId, mid) as Message.message;
-    if(!message) {
-      message = await managers.appMessagesManager.getMessageByPeer(peerId, mid) as Message.message;
-      if(options.signal.aborted) throw aborted();
-    }
+  mids.reverse();
+  // * the messages the chat does not hold (unread ones were never drawn) are asked for all at once, not
+  // * one after another: a hundred of them, each waited for in turn, was time before the first request
+  const messages = await Promise.all(mids.map((mid) => {
+    const held = chat.getMessageByPeer(peerId, mid) as Message.message;
+    return held || (managers.appMessagesManager.getMessageByPeer(peerId, mid) as Promise<Message.message>);
+  }));
+  if(options.signal.aborted) throw aborted();
 
+  // * the senders' names too: each asked for once, together
+  await Promise.all([...new Set(messages
+  .filter((message) => message?._ === 'message' && !(message.pFlags?.out && !chat.isBroadcast))
+  .map((message) => (message.fromId ?? message.peerId) as PeerId))].map((peer) => getName(peer)));
+  if(options.signal.aborted) throw aborted();
+
+  for(let index = 0; index < mids.length; ++index) {
+    const mid = mids[index], message = messages[index];
     if(message?._ !== 'message') continue;
 
     // * an album is one thing sent: its photos after the first say nothing more, unless one has the caption
