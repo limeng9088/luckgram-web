@@ -66,7 +66,8 @@ function TranscribedText(props: {id: string, state: TranscriptionState, onRetry?
       id={props.id}
       aria-busy={props.state.pending}
       classList={{
-        'is-error': props.state.error,
+        // * Luckgram (W6): a part that was transcribed is not an error's text — only the line after it is
+        'is-error': props.state.error && !(props.state.luckgramFailed && props.state.text),
         'hide': !props.state.expanded
       }}
     >
@@ -74,7 +75,16 @@ function TranscribedText(props: {id: string, state: TranscriptionState, onRetry?
         <Show when={props.state.luckgramFailed} fallback={i18n('Chat.Voice.Transribe.Error')}>
           {/* Luckgram (W6): what of a long recording was transcribed before a piece failed stays, the line after it */}
           <Show when={props.state.text}><span class="luckgram-transcribe-partial">{props.state.text}</span></Show>
-          <span class="luckgram-transcribe-retry" role="button" tabIndex={0} onClick={props.onRetry}>{props.state.luckgramFailed}</span>
+          {/* `on:click`: the span's own listener, not the document's — the press is the retry's whatever the bubble does with presses */}
+          <span
+            class="luckgram-transcribe-retry"
+            role="button"
+            tabIndex={0}
+            on:click={(e: MouseEvent) => {
+              e.stopPropagation();
+              props.onRetry?.();
+            }}
+          >{props.state.luckgramFailed}</span>
         </Show>
       </Show>
       <Show when={props.state.pending}>
@@ -189,7 +199,12 @@ export default function createAudioTranscription(options: {
 
   // * Luckgram (W6): an account that is not Premium's gets its transcription from the Luckgram server,
   // * shown by the same row. What it made before is there as the row is drawn.
+  // * whether a try is on its way: its own flag, set and cleared at once. `state.pending` is not
+  // * gone by: the failed state comes to the row with the bubble's next change, a moment later
+  let luckgramRunning = false;
   const runLuckgram = () => {
+    if(luckgramRunning) return;
+    luckgramRunning = true;
     const {message} = options.getRow();
     // * the text's place stays while it is asked for (again)
     // * (a part that was transcribed before a piece failed stays too, while the rest is asked for)
@@ -197,14 +212,19 @@ export default function createAudioTranscription(options: {
     else setState('status', 'loading');
 
     loadLuckgramVoice().then((voice) => voice.transcribeMessage(message, options.getRow()).then((text) => {
+      luckgramRunning = false;
       changeBubble(options.getRow(), () => setState((prev) => ({...reduceTranscribed(prev, {text}), luckgramFailed: undefined})));
     }, (err) => {
+      luckgramRunning = false;
       toast(voice.getVoiceErrorText(err));
       const partial: string = err?.partialText || '';
       changeBubble(options.getRow(), () => setState({
         status: 'transcribed', text: partial, pending: false, error: true, expanded: true, luckgramFailed: voice.getVoiceRetryText(!!partial)
       }));
-    })).catch(() => setState('status', 'idle'));
+    })).catch(() => {
+      luckgramRunning = false;
+      setState('status', 'idle');
+    });
   };
 
   loadLuckgramVoice().then(async(voice) => {
@@ -215,7 +235,7 @@ export default function createAudioTranscription(options: {
 
   const onClick = () => {
     if(state.luckgramFailed) {
-      if(!state.pending) runLuckgram();
+      runLuckgram();
       return;
     }
 
@@ -255,7 +275,7 @@ export default function createAudioTranscription(options: {
     state,
     /** Evaluated inside the row's `Row`, and owns the transcribed text mounted next to it. */
     button: (): JSX.Element => (
-      <TranscribeButton state={state} row={options.getRow} onClick={onClick} onRetry={() => !state.pending && runLuckgram()} />
+      <TranscribeButton state={state} row={options.getRow} onClick={onClick} onRetry={() => runLuckgram()} />
     )
   };
 }

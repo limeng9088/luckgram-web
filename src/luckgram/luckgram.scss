@@ -490,6 +490,8 @@ body.has-auth-pages {
 
 // * "转写失败 · 重试", in the place of the transcription
 .luckgram-transcribe-retry {
+  // * the colour upstream gives its own error line: after a part that was transcribed, only this line has it
+  color: var(--message-primary-color);
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
