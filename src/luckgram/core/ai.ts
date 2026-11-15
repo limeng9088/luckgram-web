@@ -8,7 +8,7 @@
  *   me          GET  /v1/me             today's quota and the Pro state
  *
  * Consent. Before the first call that sends something of the user's, the user is asked once:
- * "你选中的内容会发送到 Luckgram 的 AI 服务，由 OpenAI 处理后返回。" Without an "同意" nothing is
+ * "您提交的内容会发送到 Luckgram 的 AI 服务，由 OpenAI 处理后返回。" Without an "同意" nothing is
  * sent — not even the device's registration — and the call fails with `consent_denied`. The
  * consent is kept in LuckgramSettings (`ai_consent`) and can be withdrawn under Luckgram 功能 → AI.
  * `me` sends nothing of the user's and needs no consent.

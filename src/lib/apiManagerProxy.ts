@@ -25,7 +25,7 @@ import SuperMessagePort from '@lib/superMessagePort';
 import IS_SHARED_WORKER_SUPPORTED from '@environment/sharedWorkerSupport';
 import {IS_SAFARI} from '@environment/userAgent';
 import toggleStorages from '@helpers/toggleStorages';
-import {onLuckgramLoggingOut} from '@/luckgram/core/logout';
+import {onLuckgramAccountLeaving, onLuckgramLoggingOut} from '@/luckgram/core/logout';
 import App from '@config/app';
 import idleController from '@helpers/idleController';
 import ServiceMessagePort from '@lib/serviceWorker/serviceMessagePort';
@@ -649,6 +649,7 @@ class ApiManagerProxy extends MTProtoMessagePort {
       // const toClear: CacheStorageDbName[] = ['cachedFiles', 'cachedStreamChunks'];
       Promise.all([
         onLuckgramLoggingOut(accountsLeft), // * done before the page reloads
+        onLuckgramAccountLeaving(accountNumber === undefined || accountNumber === getCurrentAccount(), rootScope.myId as any),
         toggleStorages(false, true),
         Promise.race([
           // TODO: Check here

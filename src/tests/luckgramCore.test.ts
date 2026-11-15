@@ -896,3 +896,26 @@ describe('luckgram features: a switch takes effect at once', () => {
     await settings.set('translate_to', undefined);
   });
 });
+
+describe('luckgram: an account that leaves takes its own data with it', () => {
+  test('whoever keeps something by account is told, for this tab\'s own account only', async() => {
+    const {onAccountLeaving, onLuckgramAccountLeaving} = await import('@/luckgram/core/logout');
+    const mine = vi.fn(), failing = vi.fn(() => { throw new Error('x'); }), slow = vi.fn(() => new Promise((resolve) => setTimeout(resolve, 10)));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stops = [onAccountLeaving(mine), onAccountLeaving(failing), onAccountLeaving(slow)];
+
+    await onLuckgramAccountLeaving(false, 42);
+    await onLuckgramAccountLeaving(true, undefined);
+    expect(mine).not.toHaveBeenCalled();
+
+    // * one that fails does not keep the others from theirs, nor the log out from going on
+    await expect(onLuckgramAccountLeaving(true, 42)).resolves.toBeUndefined();
+    expect(mine).toHaveBeenCalledWith(42);
+    expect(slow).toHaveBeenCalledWith(42);
+
+    stops.forEach((stop) => stop());
+    await onLuckgramAccountLeaving(true, 43);
+    expect(mine).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+});

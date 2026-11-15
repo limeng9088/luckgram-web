@@ -9,6 +9,8 @@ import {watchForLuckgramUpdate} from '@/luckgram/update';
 import {initRoutePage} from '@/luckgram/relay/page';
 import {connection} from '@/luckgram/relay/appConnection';
 import {initLuckgramCore} from '@/luckgram/core/init';
+// * first of all: whether the page was opened at the assistant's address (W8), before upstream tidies it up
+import '@/luckgram/assistant/start';
 import './luckgram.scss';
 
 function mountDevBadge() {
