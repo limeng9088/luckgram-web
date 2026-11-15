@@ -144,6 +144,19 @@ export class LuckgramSettingsStore {
     .catch((err) => console.warn('[luckgram] a value was not stored:', (err as Error)?.message));
   }
 
+  /**
+   * The value as the database holds it now, taken into memory too: for what another tab may have
+   * written a moment ago (its message to this tab can still be on its way).
+   */
+  public async reloadPrivate<T = string>(key: string): Promise<T | undefined> {
+    try {
+      const stored = await this.storage.getAll('private');
+      if(stored && key in stored && stored[key] !== undefined) this.privateValues.set(key, stored[key]);
+    } catch(err) {}
+
+    return this.privateValues.get(key);
+  }
+
   // ------------------------------------------------------------------ everything
 
   /** Every setting and private value, here and in the other tabs (all accounts logged out). */
