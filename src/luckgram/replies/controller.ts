@@ -23,7 +23,7 @@ import {registerAiMenuItem} from '@/luckgram/writing/registry';
 import {QUICK_REPLIES, QuickReply, VISIBLE_REPLIES, getReplyPreview, matchSlash} from '@/luckgram/replies/logic';
 import {cleanRepliesOnce, getRepliesAccount, repliesStore} from '@/luckgram/replies/instance';
 import {openRepliesManager} from '@/luckgram/replies/openManage';
-import RepliesSlashHelper from '@/luckgram/replies/slashHelper';
+import RepliesSlashHelper, {makeReplyRow} from '@/luckgram/replies/slashHelper';
 
 const LONG_PRESS = 500;
 
@@ -48,6 +48,8 @@ export default class LuckgramQuickReplies {
   private menu: HTMLElement;
   private slashHelper: RepliesSlashHelper;
   private commandsHelper: AutocompleteHelper;
+  /** the templates the field's "/…" asks for now */
+  private slashFound: QuickReply[];
   private closeMenuListeners: () => void;
 
   // * `input`: upstream's ChatInput (typed loosely: this file is imported by it)
@@ -243,13 +245,16 @@ export default class LuckgramQuickReplies {
 
   /** Made by the field once its suggestions are (input.ts). */
   public attachSlashHelper(appendTo: HTMLElement, controller: any, commandsHelper?: AutocompleteHelper) {
-    this.slashHelper = new RepliesSlashHelper(appendTo, controller, (reply) => {
-      // * the template in place of the "/…" that asked for it; not sent
-      const length = (this.input.messageInputField?.value ?? '').length;
-      this.input.messageInputEditor.replaceTextRange(0, length, reply.text);
-    });
+    this.slashHelper = new RepliesSlashHelper(appendTo, controller, (reply) => this.fill(reply));
     this.commandsHelper = commandsHelper;
-    if(commandsHelper) this.slashHelper.addSibling(commandsHelper);
+    if(commandsHelper) {
+      this.slashHelper.addSibling(commandsHelper);
+      // * a chat with a bot's commands: one panel for the two — the commands that match first, the
+      // * templates that match after them, the arrow keys going through both
+      const commands = commandsHelper as any;
+      commands.luckgramAfterRender = (count: number) => this.followCommands(count);
+      commands.luckgramPick = (target: HTMLElement) => this.pickFromCommands(target);
+    }
   }
 
   /**
@@ -260,7 +265,45 @@ export default class LuckgramQuickReplies {
     if(!this.slashHelper) return;
     // * only while the caret is at the end of a field that holds nothing but the "/…"
     const found = this.isOn && value === wholeValue ? matchSlash(value, this.getItems()) : undefined;
+    this.slashFound = found;
     return this.slashHelper.show(found) ? this.slashHelper : undefined;
+  }
+
+  /**
+   * The bot commands for the same "/…" were drawn (they are asked for from the server's data, a
+   * moment after the templates were found). With commands to show, the templates go into their
+   * list, after them, and the templates' own panel gives way; with none, that panel stays.
+   */
+  private followCommands(commands: number) {
+    try {
+      const found = this.slashFound;
+      const list: HTMLElement = (this.commandsHelper as any)?.list;
+      if(!commands || !found?.length || !list || !this.isOn) return;
+      list.querySelectorAll('.luckgram-replies-helper-item').forEach((element) => element.remove());
+      // * rows only: every child of the list is something the arrow keys stop at. The first one is
+      // * marked, to draw the line between the two kinds
+      const rows = found.map((item) => makeReplyRow(item, list.ownerDocument));
+      rows[0].classList.add('is-after-commands');
+      list.append(...rows);
+      this.slashHelper.toggle(true);
+    } catch(err) {
+      console.warn('[luckgram] quick replies: commands', (err as Error)?.message);
+    }
+  }
+
+  /** A press, or Enter, on a row of the commands' list: one of the templates there is put into the field. */
+  private pickFromCommands(target: HTMLElement): boolean {
+    const id = target?.dataset?.replyId;
+    if(!id) return false;
+    const reply = this.getItems().find((item) => item.id === id);
+    if(reply) this.fill(reply);
+    return true;
+  }
+
+  /** The template in place of the "/…" that asked for it; not sent. */
+  private fill(reply: QuickReply) {
+    const length = (this.input.messageInputField?.value ?? '').length;
+    this.input.messageInputEditor.replaceTextRange(0, length, reply.text);
   }
 
   /**
