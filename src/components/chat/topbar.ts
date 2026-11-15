@@ -6,6 +6,7 @@ import mediaSizes, {ScreenSize} from '@helpers/mediaSizes';
 import rootScope, {BroadcastEvents} from '@lib/rootScope';
 import ButtonIcon from '@components/buttonIcon';
 import ButtonMenuToggle from '@components/buttonMenuToggle';
+import {lgText} from '@/luckgram/text';
 import createChatPinnedMessage, {ChatPinnedMessageController} from '@components/chat/pinnedMessage';
 import getPinnedMessagesKey from '@appManagers/utils/messages/getPinnedMessagesKey';
 import ListenerSetter from '@helpers/listenerSetter';
@@ -591,6 +592,14 @@ export default class ChatTopbar {
         };
       },
       verify: () => !this.chat.selection.isSelecting && !!this.chat.bubbles.getRenderedLength() && !(this.chat.type === ChatType.Logs)
+    }, {
+      // Luckgram (specs#189): the chat's summary, written by the AI; the card asks for the range
+      icon: 'edit_stars',
+      regularText: lgText('总结聊天', 'Summarize chat'),
+      onClick: () => {
+        this.plates.luckgramSummary.open();
+      },
+      verify: () => !this.chat.selection.isSelecting && this.plates.luckgramSummary.canOpen()
     }, {
       icon: 'select',
       text: 'Chat.Menu.ClearSelection',
@@ -1453,6 +1462,7 @@ export default class ChatTopbar {
       this.plates.groupCall?.setPeerId(peerId);
       this.plates.translation.setPeerId(peerId);
       this.plates.sponsored.setPeerId(peerId);
+      this.plates.luckgramSummary.setPeerId(peerId);
 
       callbackify(setRequestsCallback.result, (callback) => {
         if(!middleware()) {

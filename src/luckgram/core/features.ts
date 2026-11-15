@@ -92,6 +92,11 @@ export const FEATURES: LuckgramFeature[] = [
     title: ['AI 助手', 'AI assistant'],
     description: ['像聊天一样使用的 AI：提问、讲解、总结或改写长文、解题', 'An AI used like a chat: ask, explain, summarize or rewrite, solve']
   },
+  {
+    key: 'ai_summary', group: 'ai', default: true,
+    title: ['聊天总结', 'Chat summary'],
+    description: ['未读很多时聊天顶部的「总结聊天」，以及聊天「⋮」菜单里的同名项：几条要点，可跳回原消息，可追问', '"Summarize" at the top of a chat with many unread messages and in the chat\'s ⋮ menu: a few points with links back to the messages, and questions about them']
+  },
 
   // ---- 调试 / Debug
   {
