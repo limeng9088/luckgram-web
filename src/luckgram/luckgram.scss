@@ -1574,6 +1574,15 @@ body.luckgram-ai-open {
 // ---------------------------------------------------------------- W10: private notes (specs#192)
 
 // * the profile's row
+// * the note's card in Saved Messages' panel (notes/profileRow.tsx), the first thing of a panel that has
+// * no profile. The panel's header lies over the top of its content (in a profile, over the picture —
+// * upstream's `.sidebar-header` is absolute there), and upstream keeps the tabs clear of it by the
+// * content's least height; a first block of ours has to step down by the header's height itself
+// * (upstream's $header-height, 56px), or it stands under the header's title
+.shared-media-container .profile-content > .luckgram-note-saved {
+  margin-top: 3.5rem;
+}
+
 .luckgram-note-row {
   .luckgram-note-row-empty {
     color: var(--secondary-text-color);

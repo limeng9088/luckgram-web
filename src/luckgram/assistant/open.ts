@@ -19,7 +19,8 @@ import {luckgramStorage} from '@/luckgram/core/settings';
 import {isFeatureEnabled} from '@/luckgram/core/features';
 import luckgramAI from '@/luckgram/core/instance';
 import {lgText} from '@/luckgram/text';
-import {AI_ASSISTANT, AI_HASH} from '@/luckgram/assistant/logic';
+import {remoteNumber} from '@/luckgram/core/remoteConfig';
+import {AI_ASSISTANT, AI_HASH, DEFAULT_MAX_INPUT_CHARS, KEY_MAX_INPUT_CHARS} from '@/luckgram/assistant/logic';
 import AssistantPage from '@/luckgram/assistant/page';
 import type {AssistantPageApi} from '@/luckgram/assistant/registry';
 import {AssistantStore} from '@/luckgram/assistant/store';
@@ -94,6 +95,7 @@ export async function openAssistant(): Promise<AssistantPageApi | undefined> {
     account: rootScope.myId as any,
     store: assistantStore,
     chat: (options) => luckgramAI.chat(options),
+    maxInputChars: () => remoteNumber(KEY_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS),
     onBack: () => closeAssistant(),
     copy: (text) => {
       copyTextToClipboard(text);

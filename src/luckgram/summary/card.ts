@@ -15,7 +15,7 @@ import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {LuckgramApiError, errorMessage} from '@/luckgram/core/errors';
 import {lgText} from '@/luckgram/text';
 import {holdEscape} from '@/luckgram/core/escape';
-import {RANGES, REFERENCE_MARK, SummaryRange, markReferences, parseBullets, parseSegments} from '@/luckgram/summary/logic';
+import {MAX_QUESTION_CHARS, RANGES, REFERENCE_MARK, SummaryRange, markReferences, parseBullets, parseSegments} from '@/luckgram/summary/logic';
 import SummarySession, {EmptyRangeError, SummaryProgress} from '@/luckgram/summary/session';
 
 export type SummaryCardOptions = {
@@ -105,6 +105,8 @@ export default class SummaryCard {
     this.field.type = 'text';
     this.field.dir = 'auto';
     this.field.placeholder = lgText('问这些消息…', 'Ask about these messages…');
+    // * a question, not a document: the request's room is for the messages it is asked about
+    this.field.maxLength = MAX_QUESTION_CHARS;
     this.field.addEventListener('keydown', (e) => {
       if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
         e.preventDefault();

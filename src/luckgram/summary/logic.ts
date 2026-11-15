@@ -13,6 +13,8 @@ export type SummaryRange = 'unread' | typeof RANGES[number];
 export const MAX_MESSAGES = 500;
 /** A line longer than this is cut, so that one long message cannot take a whole part. */
 export const MAX_LINE_CHARS = 2000;
+/** A question about the summarized messages is no longer than this (the field takes no more). */
+export const MAX_QUESTION_CHARS = 2000;
 /** remote config: how long a request's text may be (the server's default) */
 export const KEY_MAX_INPUT_CHARS = 'ai.max_input_chars';
 export const DEFAULT_MAX_INPUT_CHARS = 60000;
