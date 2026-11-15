@@ -55,11 +55,24 @@ export function canSelectAllFrom(check: SelectAllCheck) {
 }
 
 /** [中文, English] of the menu's item. `name` is the sender's first name, in a group. */
-export function getSelectAllText(of: {isOwn: boolean, isPrivate: boolean, name?: string}): [string, string] {
+export function getSelectAllText(of: {isOwn: boolean, isPrivate: boolean, name?: string, isSaved?: boolean}): [string, string] {
   if(of.isOwn) return ['全选我的消息', 'Select all my messages'];
-  if(of.isPrivate || !of.name) return ['全选对方的消息', 'Select all their messages'];
+  // * Saved Messages: what was forwarded there is its first sender's
+  if(of.isSaved && !of.name) return ['全选同一来源的消息', 'Select all from the same source'];
+  if((of.isPrivate && !of.isSaved) || !of.name) return ['全选对方的消息', 'Select all their messages'];
   const name = Array.from(of.name).length > 20 ? Array.from(of.name).slice(0, 20).join('') + '…' : of.name;
   return [`全选 ${name} 的消息`, `Select all messages from ${name}`];
+}
+
+/**
+ * Whose a message of Saved Messages is: one's own when it was written there (or forwarded from
+ * oneself), otherwise the one it was forwarded from — by id, or by name where the account is hidden.
+ */
+export function getSavedOrigin(message: {fwd_from?: {from_name?: string}, fwdFromId?: PeerId}, myId: PeerId): string {
+  if(!message?.fwd_from) return 'me';
+  if(message.fwdFromId) return message.fwdFromId === myId ? 'me' : 'peer:' + message.fwdFromId;
+  if(message.fwd_from.from_name) return 'name:' + message.fwd_from.from_name;
+  return 'unknown';
 }
 
 export type SenderPage = {
