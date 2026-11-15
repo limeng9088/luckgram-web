@@ -82,6 +82,20 @@ function removeBlock(bubble: HTMLElement) {
   bubble.classList.remove('is-luckgram-translated');
 }
 
+/**
+ * The translation's place in the message: the last thing of it, before the time that floats at
+ * the end of the text. Nothing is moved when it is there already.
+ */
+function placeBlock(messageDiv: HTMLElement, block: HTMLElement) {
+  const time = [...messageDiv.children].find((element) => element.classList.contains('time'));
+  const next = block.parentElement === messageDiv ? block.nextElementSibling : undefined;
+  if(time) {
+    if(next !== time) messageDiv.insertBefore(block, time);
+  } else if(block.parentElement !== messageDiv || next) {
+    messageDiv.append(block);
+  }
+}
+
 function makeBlock(bubble: HTMLElement) {
   const messageDiv = getMessageDiv(bubble);
   if(!messageDiv) return;
@@ -99,10 +113,20 @@ function makeBlock(bubble: HTMLElement) {
   text.classList.add(BLOCK_CLASS + '-text');
   block.append(header, text);
 
-  // * before the time, which floats at the end of the text
-  const time = [...messageDiv.children].find((element) => element.classList.contains('time'));
-  if(time) messageDiv.insertBefore(block, time);
-  else messageDiv.append(block);
+  placeBlock(messageDiv, block);
+  // * what comes into the bubble later goes over the translation, not under it: a round video's
+  // * voice row and transcription are only put in when it is unfolded (specs#186: after a reload
+  // * the translation, drawn first, stood above them)
+  const observer = new MutationObserver(() => {
+    // * taken out: the translation undone, or another block made in its place
+    if(block.parentElement !== messageDiv) {
+      observer.disconnect();
+      return;
+    }
+
+    placeBlock(messageDiv, block);
+  });
+  observer.observe(messageDiv, {childList: true});
 
   bubble.classList.add('is-luckgram-translated');
   return {block, header, text};
