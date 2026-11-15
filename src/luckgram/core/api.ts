@@ -159,8 +159,8 @@ export class LuckgramApi {
 
       const controller = new AbortController();
       const onAbort = () => controller.abort();
-      request.signal?.addEventListener('abort', onAbort);
-      let timedOut = false;
+      request.signal?.addEventListener('abort', onAbort, {once: true});
+      let timedOut = false, answered = false;
       const isLong = request.timeoutMs > CONNECT_TIMEOUT_MS;
       const timeout = setTimeout(() => {
         timedOut = true;
@@ -180,8 +180,11 @@ export class LuckgramApi {
 
         if(endpoints.markWorking(base)) this.settings.set(KEY_ENDPOINT, base);
         this.maybeProbe();
-        // * the body (a stream of an AI answer) may take as long as it takes; the caller's signal still ends it
+        // * the body (a stream of an AI answer) may take as long as it takes; the caller's signal still
+        // * ends it — so the signal stays tied to this request after its headers came ("停止" while an
+        // * answer was being written did nothing: the tie was cut here, with the headers)
         clearTimeout(timeout);
+        answered = true;
         return response;
       } catch(err) {
         if(request.signal?.aborted && !timedOut) throw new LuckgramApiError(LuckgramApiError.CANCELLED);
@@ -191,7 +194,7 @@ export class LuckgramApi {
         // * the entry could not be reached (DNS, connection, TLS, no answer in time): the next one
       } finally {
         clearTimeout(timeout);
-        request.signal?.removeEventListener('abort', onAbort);
+        if(!answered) request.signal?.removeEventListener('abort', onAbort);
       }
     }
 

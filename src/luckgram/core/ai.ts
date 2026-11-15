@@ -139,9 +139,15 @@ export class LuckgramAI {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
+      // * stopped by the caller: the reading ends at once, whatever the request underneath does, and
+      // * nothing that still comes is given on
+      const onAbort = () => reader.cancel().catch(() => {});
+      options.signal?.addEventListener('abort', onAbort, {once: true});
       try {
         while(!failure) {
+          if(options.signal?.aborted) throw new LuckgramApiError(LuckgramApiError.CANCELLED);
           const {value, done: ended} = await reader.read();
+          if(options.signal?.aborted) throw new LuckgramApiError(LuckgramApiError.CANCELLED);
           if(ended) break;
           parser.push(decoder.decode(value, {stream: true}));
         }
@@ -153,6 +159,7 @@ export class LuckgramAI {
         // * cut off in the middle: what came is not an answer
         throw new LuckgramApiError(LuckgramApiError.NETWORK_ERROR);
       } finally {
+        options.signal?.removeEventListener('abort', onAbort);
         reader.cancel().catch(() => {});
       }
 
