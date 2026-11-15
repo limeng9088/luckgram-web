@@ -1,7 +1,7 @@
 // * Luckgram Web (luckgram-specs#190, W11a): 收藏 and "全选 … 的消息" — the rules, the pages, the batches
 
 import {
-  BATCH_SIZE, BatchRun, BatchState, canSaveMessage, canSelectAllFrom, chunk, collectSenderMessages, findSavedMid, getBatchText, getSelectAllText, mergeTexts
+  BATCH_SIZE, BatchRun, BatchState, canSaveMessage, canSelectAllFrom, chunk, collectSenderMessages, findSavedMid, getBatchText, getSavedOrigin, getSelectAllText, mergeTexts
 } from '@/luckgram/actions/logic';
 
 describe('luckgram actions: 收藏', () => {
@@ -25,6 +25,21 @@ describe('luckgram actions: 收藏', () => {
 });
 
 describe('luckgram actions: whose messages can be selected', () => {
+  test('Saved Messages: by where a message came from', () => {
+    const me = 7 as any as PeerId;
+    expect(getSavedOrigin({}, me)).toBe('me');
+    expect(getSavedOrigin({fwd_from: {}, fwdFromId: me}, me)).toBe('me');
+    expect(getSavedOrigin({fwd_from: {}, fwdFromId: -100 as any as PeerId}, me)).toBe('peer:-100');
+    expect(getSavedOrigin({fwd_from: {}, fwdFromId: 9 as any as PeerId}, me)).not.toBe(getSavedOrigin({fwd_from: {}, fwdFromId: 8 as any as PeerId}, me));
+    expect(getSavedOrigin({fwd_from: {from_name: 'Hidden'}}, me)).toBe('name:Hidden');
+    expect(getSavedOrigin({fwd_from: {}}, me)).toBe('unknown');
+
+    expect(getSelectAllText({isOwn: true, isPrivate: true, isSaved: true})[0]).toBe('全选我的消息');
+    expect(getSelectAllText({isOwn: false, isPrivate: true, isSaved: true, name: '频道'})[0]).toBe('全选 频道 的消息');
+    expect(getSelectAllText({isOwn: false, isPrivate: true, isSaved: true})[0]).toBe('全选同一来源的消息');
+    expect(getSelectAllText({isOwn: false, isPrivate: true, name: 'x'})[0]).toBe('全选对方的消息');
+  });
+
   const ok = {enabled: true, isChatView: true, isBroadcast: false, isService: false, senderId: 7};
 
   test('in a group or a private chat; not in a channel that broadcasts, not in other views', () => {

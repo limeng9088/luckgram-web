@@ -10,10 +10,13 @@ import type {Message} from '@layer';
 import getPeerTitle from '@components/wrappers/getPeerTitle';
 import rootScope from '@lib/rootScope';
 import {lgText} from '@/luckgram/text';
-import {BATCH_SIZE, collectSenderMessages, getSelectAllText, mergeTexts} from '@/luckgram/actions/logic';
+import {BATCH_SIZE, collectSenderMessages, getSavedOrigin, getSelectAllText, mergeTexts} from '@/luckgram/actions/logic';
 import {installBatchDemo, openProgressLine} from '@/luckgram/actions/progress';
 
-/** Whose the message is, for the selection: in Saved Messages everything is one's own. */
+/**
+ * Whose the message is, for the selection. In Saved Messages it only says there is someone: the
+ * messages there are told apart by where they came from (logic.ts: getSavedOrigin).
+ */
 export function getSenderId(chat: Chat, message: Message.message): PeerId {
   if(chat.peerId === rootScope.myId) return rootScope.myId;
   return (message.fromId ?? message.peerId) as PeerId;
@@ -21,8 +24,18 @@ export function getSenderId(chat: Chat, message: Message.message): PeerId {
 
 export async function getSelectAllLabel(chat: Chat, message: Message.message): Promise<string> {
   const senderId = getSenderId(chat, message);
-  const isOwn = senderId === rootScope.myId || (!!message.pFlags?.out && chat.peerId.isUser());
   const isPrivate = chat.peerId.isUser();
+  if(chat.peerId === rootScope.myId) {
+    const isOwn = getSavedOrigin(message, rootScope.myId) === 'me';
+    let name: string = isOwn || message.fwdFromId ? undefined : message.fwd_from?.from_name;
+    if(!isOwn && message.fwdFromId) {
+      name = await Promise.resolve(getPeerTitle({peerId: message.fwdFromId, plainText: true, onlyFirstName: true}) as any as Promise<string>).catch((): string => undefined);
+    }
+
+    return lgText(...getSelectAllText({isOwn, isPrivate, isSaved: true, name}));
+  }
+
+  const isOwn = senderId === rootScope.myId || (!!message.pFlags?.out && chat.peerId.isUser());
   let name: string;
   if(!isOwn && !isPrivate) {
     name = await Promise.resolve(getPeerTitle({peerId: senderId, plainText: true, onlyFirstName: true}) as any as Promise<string>).catch((): string => undefined);
@@ -80,9 +93,12 @@ export async function selectAllFromSender(chat: Chat, message: Message.message) 
           const raw = page?.history || [];
           const messages = await Promise.all(raw.map((mid) => managers.appMessagesManager.getMessageByPeer(peerId, mid)));
           const isSaved = peerId === rootScope.myId, wantOut = senderId === rootScope.myId;
+          // * Saved Messages: the ones of the same origin — written there, or forwarded from the same sender
+          const origin = isSaved && getSavedOrigin(message, rootScope.myId);
           const mids = raw.filter((_mid, index) => {
             const item = messages[index] as Message.message;
-            return item?._ === 'message' && (isSaved || !!item.pFlags?.out === wantOut);
+            if(item?._ !== 'message') return false;
+            return isSaved ? getSavedOrigin(item, rootScope.myId) === origin : !!item.pFlags?.out === wantOut;
           });
           return {mids, end: !raw.length || !!page.isEnd?.top, next: raw.length ? Math.min(...raw) : undefined};
         }
