@@ -1,25 +1,28 @@
 /*
  * Luckgram Web (luckgram-specs#188, W8 需求 1): whether the "Luckgram AI" row stands over the
- * chat list — under the AI 助手 switch of "Luckgram 功能 → AI". Shown unless switched off.
+ * chat list — under the AI 助手 switch of "Luckgram 功能 → AI", as its part: set in from it, and
+ * not to be changed while that switch is off. Shown unless switched off.
  */
 
 import {JSX} from 'solid-js';
 import CheckboxFieldTsx from '@components/checkboxFieldTsx';
 import Row from '@components/rowTsx';
 import LuckgramSettings from '@/luckgram/core/settings';
-import {useBoolSetting} from '@/luckgram/core/hooks';
+import {useBoolSetting, useFeatureEnabled} from '@/luckgram/core/hooks';
 import {lgText} from '@/luckgram/text';
-import {KEY_PIN} from '@/luckgram/assistant/logic';
+import {AI_ASSISTANT, KEY_PIN} from '@/luckgram/assistant/logic';
 
 export default function AssistantSettingsRows(): JSX.Element {
   const pinned = useBoolSetting(KEY_PIN, true);
+  const enabled = useFeatureEnabled(AI_ASSISTANT);
   return (
-    <Row>
+    <Row class="luckgram-sub-row" disabled={!enabled()}>
       <Row.CheckboxFieldToggle>
         <CheckboxFieldTsx
           toggle
+          disabled={!enabled()}
           checked={pinned()}
-          onChange={(checked) => checked !== pinned() && LuckgramSettings.set(KEY_PIN, checked)}
+          onChange={(checked) => enabled() && checked !== pinned() && LuckgramSettings.set(KEY_PIN, checked)}
         />
       </Row.CheckboxFieldToggle>
       <Row.Title>{lgText('在聊天列表顶部显示', 'Show at the top of the chat list')}</Row.Title>

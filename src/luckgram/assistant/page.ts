@@ -13,6 +13,7 @@
  * conversation's latest 20 messages; nothing is sent to Telegram.
  */
 
+import Icon from '@components/icon';
 import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {LuckgramApiError, errorMessage} from '@/luckgram/core/errors';
 import type {AiChatOptions} from '@/luckgram/core/ai';
@@ -105,7 +106,9 @@ export default class AssistantPage {
     // * header
     const header = el('div', 'luckgram-ai-header');
     if(this.options.onBack) {
-      const back = button('luckgram-ai-icon-button luckgram-ai-back', '‹', () => this.options.onBack());
+      // * upstream's own arrow, as in a chat's header
+      const back = button('luckgram-ai-icon-button luckgram-ai-back', '', () => this.options.onBack());
+      back.append(Icon('left'));
       back.setAttribute('aria-label', lgText('返回', 'Back'));
       header.append(back);
     }
