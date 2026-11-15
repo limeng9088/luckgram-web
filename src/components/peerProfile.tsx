@@ -58,6 +58,8 @@ import showCollectibleInfoPopup from '@components/popups/collectibleInfo';
 import {openSavedMusicTab} from '@components/savedMusicActions';
 import ripple from '@components/ripple';
 import {keepMe} from '@helpers/keepMe';
+import LuckgramNoteRow from '@/luckgram/notes/profileRow';
+import {COPY_LINK_TEXT, LuckgramRegistrationRow, copyUserLink, getDisplayId, useProfileDetails} from '@/luckgram/profile/rows';
 import choosePhotoSize from '@appManagers/utils/photos/choosePhotoSize';
 import wrapPhoto from './wrappers/photo';
 import {unwrap} from 'solid-js/store';
@@ -970,15 +972,20 @@ PeerProfile.ContactNote = () => {
 PeerProfile.PeerId = () => {
   const context = useContext(PeerProfileContext);
   const {i18n} = useHotReloadGuard();
+  // * Luckgram (specs#192): the row is shown by its own switch too, and then in the form the phones show
+  // * (-100… for a supergroup or a channel); upstream's switch alone keeps upstream's row as it was
+  const luckgramDetails = useProfileDetails();
   const peerId = createMemo(() => {
-    if(!appSettings.showPeerIds || !context.canBeDetailed() || context.isTopic) {
+    if((!appSettings.showPeerIds && !luckgramDetails()) || !context.canBeDetailed() || context.isTopic) {
       return;
     }
 
+    if(luckgramDetails()) return getDisplayId(context.peerId, (context.peer as Chat)?._ === 'channel');
     return '' + Math.abs(context.peerId);
   });
 
   const dcId = createMemo(() => {
+    if(!appSettings.showPeerIds) return;
     const photo = getPeerPhoto(context.peer as User | Chat);
     if(photo?._ === 'userProfilePhoto' && photo.pFlags.personal) {
       return ((context.fullPeer as UserFull.userFull)?.profile_photo as Photo.photo)?.dc_id;
@@ -998,6 +1005,11 @@ PeerProfile.PeerId = () => {
             icon: 'copy',
             text: 'Text.CopyLabel_Id',
             onClick
+          }, {
+            icon: 'link',
+            regularText: COPY_LINK_TEXT() as any,
+            onClick: () => copyUserLink(context.peerId),
+            verify: () => luckgramDetails() && context.peerId.isUser()
           }]
         }}
       >
@@ -2067,7 +2079,14 @@ PeerProfile.MainSection = () => {
       <PeerProfile.Username />
       <PeerProfile.Location />
       <PeerProfile.Bio />
+      {/* Luckgram (specs#192): the private note — in Saved Messages too, where upstream shows no other row */}
+      <Show when={!context.isTopic && !context.isSavedDialog}>
+        <LuckgramNoteRow peerId={context.peerId} isChannel={(context.peer as Chat)?._ === 'channel'} />
+      </Show>
       <PeerProfile.PeerId />
+      <Show when={context.canBeDetailed() && !context.isTopic && context.peerId.isUser()}>
+        <LuckgramRegistrationRow peerId={context.peerId} />
+      </Show>
       <PeerProfile.Link />
       <PeerProfile.Birthday />
       <PeerProfile.ContactNote />

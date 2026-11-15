@@ -82,6 +82,14 @@ export default function LuckgramFeaturesPage(): JSX.Element {
     tab.slider.createTab(LuckgramSubpageTab).open({feature});
   };
 
+  const openNotes = () => {
+    tab.slider.createTab(LuckgramSubpageTab).open({feature: {
+      key: 'user_notes_list', group: 'profiles', default: true,
+      title: ['全部备注', 'All notes'], description: ['', ''],
+      subpage: () => import('@/luckgram/notes/listTab')
+    }});
+  };
+
   const openDebug = () => {
     // * a literal the bundler sees: the debug page is not in a production build at all
     if(import.meta.env.VITE_LG_CHANNEL !== 'prod') {
@@ -115,6 +123,12 @@ export default function LuckgramFeaturesPage(): JSX.Element {
                 </Show>
                 <Show when={feature.key === 'dictation'}>
                   <DictationSettingsRows />
+                </Show>
+                <Show when={feature.key === 'user_notes'}>
+                  <Row clickable={openNotes} class="luckgram-sub-row">
+                    <Row.Title>{lgText('全部备注', 'All notes')}</Row.Title>
+                    <Row.Subtitle>{lgText('查看、搜索、导出和导入', 'See, search, export and import')}</Row.Subtitle>
+                  </Row>
                 </Show>
               </>
             )}</For>

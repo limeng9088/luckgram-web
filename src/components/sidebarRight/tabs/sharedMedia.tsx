@@ -9,6 +9,7 @@ import I18n, {LangPackKey, i18n} from '@lib/langPack';
 import ButtonCorner from '@components/buttonCorner';
 import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {getPeerProfileTitleKey, renderPeerProfile} from '@components/peerProfile';
+import {renderSavedNoteSection} from '@/luckgram/notes/profileRow';
 import {Message} from '@layer';
 import getMessageThreadId from '@appManagers/utils/messages/getMessageThreadId';
 import liteMode from '@helpers/liteMode';
@@ -193,6 +194,12 @@ const SharedMedia: Component = () => {
 
           tab.searchSuper.container.replaceWith(content);
           content.append(tab.searchSuper.container);
+
+          // * Luckgram (specs#192): Saved Messages has no profile here, the private note gets its own card
+          if(tab.peerId === rootScope.myId && !tab.threadId) createRoot((dispose) => {
+            tab.middlewareHelper.onDestroy(dispose);
+            content.prepend(renderSavedNoteSection(tab.peerId, HotReloadGuard));
+          });
         }
 
         return () => {};

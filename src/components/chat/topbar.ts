@@ -1463,6 +1463,7 @@ export default class ChatTopbar {
       this.plates.translation.setPeerId(peerId);
       this.plates.sponsored.setPeerId(peerId);
       this.plates.luckgramSummary.setPeerId(peerId);
+      this.plates.luckgramNote.setPeerId(peerId);
 
       callbackify(setRequestsCallback.result, (callback) => {
         if(!middleware()) {
