@@ -9,7 +9,8 @@ import mergeEntities from '@lib/richTextProcessor/mergeEntities';
 import parseEntities from '@lib/richTextProcessor/parseEntities';
 import wrapRichText from '@lib/richTextProcessor/wrapRichText';
 import type {MessageEntity} from '@layer';
-import {TABLE_LANGUAGE, markdownToEntities} from '@/luckgram/assistant/logic';
+import {markdownToEntities} from '@/luckgram/assistant/logic';
+import {drawTables} from '@/luckgram/assistant/tables';
 
 export function renderMarkdown(markdown: string): DocumentFragment {
   try {
@@ -17,7 +18,7 @@ export function renderMarkdown(markdown: string): DocumentFragment {
     // * links, mentions and the like that stand in the text as they are
     const entities = mergeEntities(formatting as MessageEntity[], parseEntities(text));
     const fragment = wrapRichText(text, {entities});
-    drawTables(fragment, text, formatting as MessageEntity[]);
+    drawTables(fragment, text, formatting);
     return fragment;
   } catch(err) {
     // * whatever the renderer chokes on is shown as it was written
@@ -26,28 +27,6 @@ export function renderMarkdown(markdown: string): DocumentFragment {
     fragment.append(markdown);
     return fragment;
   }
-}
-
-/**
- * A table is written as it came, in a fixed-width font: its lines never wrap (the box scrolls
- * sideways), so the columns stay columns. It reaches upstream's renderer as a block of code — the
- * only thing there that keeps lines as they are — and is taken out of that block's shell here:
- * no header, no language, no copy button, which are a block of code's.
- */
-function drawTables(fragment: DocumentFragment, text: string, entities: MessageEntity[]) {
-  const blocks = entities.filter((entity) => entity._ === 'messageEntityPre') as MessageEntity.messageEntityPre[];
-  if(!blocks.some((block) => block.language === TABLE_LANGUAGE)) return;
-  // * upstream draws a `pre.code` for each, in their order
-  const drawn = fragment.querySelectorAll('pre.code');
-  if(drawn.length !== blocks.length) return;
-  blocks.forEach((block, index) => {
-    if(block.language !== TABLE_LANGUAGE) return;
-    const table = document.createElement('pre');
-    table.classList.add('luckgram-ai-table');
-    table.dir = 'ltr';
-    table.textContent = text.slice(block.offset, block.offset + block.length).replace(/\n+$/, '');
-    drawn[index].replaceWith(table);
-  });
 }
 
 export function renderPlain(text: string): DocumentFragment {

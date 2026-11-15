@@ -301,26 +301,25 @@ describe('luckgram assistant: the row over the chat list', () => {
   });
 });
 
-// * read as upstream's renderer is loaded: the test's page has no canvas to ask
-vi.mock('@environment/webpSupport', () => ({default: false}));
-// * colouring a block of code fetches the language's grammar: nothing to fetch from in a test
-vi.mock('@/codeLanguages', () => ({
-  CodeLanguageAliases: {js: 'javascript'},
-  highlightCode: (): undefined => undefined,
-  highlightCodeAuto: async(): Promise<undefined> => undefined
-}));
-
 describe('luckgram assistant: a table is drawn as its own lines, not as a block of code (specs#188)', () => {
+  /** What upstream's renderer draws for a block of code (wrapRichText.ts: messageEntityPre). */
+  const codeBlock = (text: string) => {
+    const pre = document.createElement('pre');
+    pre.classList.add('quote-like', 'code');
+    pre.innerHTML = '<div class="code-header"><span class="code-header-name">复制</span></div><div class="code-content"><code class="code-code"></code></div>';
+    pre.querySelector('code').textContent = text;
+    return pre;
+  };
+
   test('no shell of a code block around it; a block of code the model wrote keeps its own', async() => {
-    // * upstream's renderer watches what it draws come into view: not there in the test's page
-    (globalThis as any).IntersectionObserver ??= class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-    const {renderMarkdown} = await import('@/luckgram/assistant/render');
+    const {drawTables} = await import('@/luckgram/assistant/tables');
+    const {text, entities} = markdownToEntities('对比如下：\n\n| 项目 | Price |\n|---|---|\n| 苹果 | 3 |\n| Banana | 12 |\n\n```js\nconst a = 1;\n```\n完。');
+    const blocks = entities.filter((entity) => entity._ === 'messageEntityPre');
+    expect(blocks.map((block) => block.language)).toEqual(['lgtable', 'js']);
+
     const host = document.createElement('div');
-    host.append(renderMarkdown('对比如下：\n\n| 项目 | Price |\n|---|---|\n| 苹果 | 3 |\n| Banana | 12 |\n\n```js\nconst a = 1;\n```\n完。'));
+    host.append('对比如下：', ...blocks.map((block) => codeBlock(text.slice(block.offset, block.offset + block.length))), '完。');
+    drawTables(host, text, entities);
 
     const table = host.querySelector('pre.luckgram-ai-table');
     expect(table).not.toBeNull();
@@ -330,13 +329,20 @@ describe('luckgram assistant: a table is drawn as its own lines, not as a block 
     expect(lines[0]).toContain('项目');
     expect(lines[3]).toContain('Banana');
     expect(table.textContent).not.toContain('```');
-    expect(table.textContent).not.toContain('lgtable');
+    expect(host.textContent).not.toContain('lgtable');
 
     // * the code is still a block of code, with its header; the table is not one of them
     const code = host.querySelectorAll('pre.code');
     expect(code.length).toBe(1);
     expect(code[0].querySelector('.code-header')).not.toBeNull();
     expect(code[0].textContent).toContain('const a = 1;');
-    expect(host.textContent).not.toContain('lgtable');
+  });
+
+  test('blocks that do not match what was drawn are left as they are', async() => {
+    const {drawTables} = await import('@/luckgram/assistant/tables');
+    const {text, entities} = markdownToEntities('| a | b |\n|---|---|\n| 1 | 2 |');
+    const host = document.createElement('div');
+    drawTables(host, text, entities);
+    expect(host.children.length).toBe(0);
   });
 });
