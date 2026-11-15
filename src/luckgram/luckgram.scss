@@ -862,12 +862,13 @@ body.luckgram-ai-open {
   cursor: pointer;
 }
 
-// * the back arrow is for a window with one column
+// * the back arrow is for a window where the chat list is not docked beside the page: one column, or a
+// * list that floats over the middle column (upstream's chat header shows its own from the same width)
 .luckgram-ai-back {
   display: none;
   font-size: 1.5rem;
 
-  @media (max-width: 600px) {
+  @media (max-width: 925px) {
     display: flex;
     align-items: center;
     justify-content: center;
