@@ -72,6 +72,8 @@ function TranscribedText(props: {id: string, state: TranscriptionState, onRetry?
     >
       <Show when={props.state.error} fallback={props.state.text}>
         <Show when={props.state.luckgramFailed} fallback={i18n('Chat.Voice.Transribe.Error')}>
+          {/* Luckgram (W6): what of a long recording was transcribed before a piece failed stays, the line after it */}
+          <Show when={props.state.text}><span class="luckgram-transcribe-partial">{props.state.text}</span></Show>
           <span class="luckgram-transcribe-retry" role="button" tabIndex={0} onClick={props.onRetry}>{props.state.luckgramFailed}</span>
         </Show>
       </Show>
@@ -190,15 +192,17 @@ export default function createAudioTranscription(options: {
   const runLuckgram = () => {
     const {message} = options.getRow();
     // * the text's place stays while it is asked for (again)
-    if(state.status === 'transcribed') setState({pending: true, error: false, luckgramFailed: undefined, text: '', expanded: true});
+    // * (a part that was transcribed before a piece failed stays too, while the rest is asked for)
+    if(state.status === 'transcribed') setState({pending: true, error: false, luckgramFailed: undefined, text: state.luckgramFailed ? state.text : '', expanded: true});
     else setState('status', 'loading');
 
     loadLuckgramVoice().then((voice) => voice.transcribeMessage(message).then((text) => {
       changeBubble(options.getRow(), () => setState((prev) => ({...reduceTranscribed(prev, {text}), luckgramFailed: undefined})));
     }, (err) => {
       toast(voice.getVoiceErrorText(err));
+      const partial: string = err?.partialText || '';
       changeBubble(options.getRow(), () => setState({
-        status: 'transcribed', text: '', pending: false, error: true, expanded: true, luckgramFailed: voice.getVoiceRetryText()
+        status: 'transcribed', text: partial, pending: false, error: true, expanded: true, luckgramFailed: voice.getVoiceRetryText(!!partial)
       }));
     })).catch(() => setState('status', 'idle'));
   };

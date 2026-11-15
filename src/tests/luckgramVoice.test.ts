@@ -95,6 +95,73 @@ describe('luckgram voice: what is sent', () => {
     expect(getPieceLanguage({text: 'hi', language: ''})).toBeUndefined();
   });
 
+  test('a piece that fails is asked once more; what is done is kept and gone on from (specs#186)', async() => {
+    const {transcribeInPieces, PartialTranscription, isRetryablePieceError} = await import('@/luckgram/voice/pieces');
+    const decode = async() => new Float32Array(5 * 60 * PIECE_SAMPLE_RATE);
+    const blob = new Blob([new Uint8Array(600 * 1024)], {type: 'audio/ogg'});
+    const fail = (code: string) => Object.assign(new Error(code), {code});
+    /** `plan[n]`: what the n-th call does — a text, or an error's code */
+    const make = (plan: (string | {error: string})[]) => {
+      const asked: (string | undefined)[] = [];
+      const send = async(_piece: Blob, language?: string) => {
+        const step = plan[asked.length];
+        asked.push(language);
+        if(typeof(step) !== 'string') throw fail(step.error);
+        return {text: step, language: 'zh'};
+      };
+      return {asked, send};
+    };
+    const base = {maxBytes: getMaxBytes(4), durationSeconds: 300, decode};
+
+    expect(isRetryablePieceError(fail('timeout'))).toBe(true);
+    expect(isRetryablePieceError(fail('network_error'))).toBe(true);
+    expect(isRetryablePieceError(fail('quota_exceeded'))).toBe(false);
+    expect(isRetryablePieceError(fail('input_too_large'))).toBe(false);
+    expect(isRetryablePieceError(new Error('x'))).toBe(false);
+
+    // * the second piece times out once: asked again, and the whole is there — 4 calls for 3 pieces
+    const once = make(['一', {error: 'timeout'}, '二', '三']);
+    expect(await transcribeInPieces(blob, {...base, send: once.send})).toBe('一二三');
+    expect(once.asked).toEqual([undefined, 'zh', 'zh', 'zh']);
+
+    // * it fails twice: the first piece is kept, with what it takes to go on
+    const twice = make(['一', {error: 'timeout'}, {error: 'network_error'}]);
+    const error: any = await transcribeInPieces(blob, {...base, send: twice.send}).catch((err) => err);
+    expect(error).toBeInstanceOf(PartialTranscription);
+    expect(error.text).toBe('一');
+    expect(error.cause.code).toBe('network_error');
+    expect(error.done.texts).toEqual(['一']);
+    expect(error.done.language).toBe('zh');
+    expect(twice.asked.length).toBe(3);
+
+    // * asked again: only the second and the third piece are sent, in the first one's language
+    const again = make(['二', '三']);
+    expect(await transcribeInPieces(blob, {...base, send: again.send, resume: error.done})).toBe('一二三');
+    expect(again.asked).toEqual(['zh', 'zh']);
+
+    // * the quota is not asked twice, and what is done still stands
+    const quota = make(['一', '二', {error: 'quota_exceeded'}]);
+    const stopped: any = await transcribeInPieces(blob, {...base, send: quota.send}).catch((err) => err);
+    expect(stopped).toBeInstanceOf(PartialTranscription);
+    expect(stopped.text).toBe('一二');
+    expect(quota.asked.length).toBe(3);
+
+    // * the first piece fails for good: nothing is done, the error is the piece's own
+    const first = make([{error: 'timeout'}, {error: 'timeout'}]);
+    expect(await transcribeInPieces(blob, {...base, send: first.send}).catch((err) => err)).toMatchObject({code: 'timeout'});
+    expect(first.asked.length).toBe(2);
+
+    // * pieces cut another way (the server's size limit changed) are not gone on from: all over again
+    const other = make(['a', 'b', 'c']);
+    expect(await transcribeInPieces(blob, {...base, send: other.send, resume: {...error.done, samplesPerPiece: 1}})).toBe('a b c');
+    expect(other.asked.length).toBe(3);
+
+    // * a recording sent as it is: asked once more too
+    const whole = make([{error: 'timeout'}, '整条']);
+    expect(await transcribeInPieces(blob, {...base, durationSeconds: 28, send: whole.send})).toBe('整条');
+    expect(whole.asked.length).toBe(2);
+  });
+
   test('pieces of about two minutes, each under the limit, covering every sample once', () => {
     const max = getMaxBytes(4);
     const perPiece = getSamplesPerPiece(max);

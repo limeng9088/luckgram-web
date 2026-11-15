@@ -264,15 +264,24 @@ export function wrapRoundVideoBubble({
           const retry = document.createElement('span');
           retry.classList.add('luckgram-transcribe-retry');
           retry.setAttribute('role', 'button');
-          retry.textContent = voice.getVoiceRetryText();
+          // * what was transcribed before a piece failed stays, the line after it
+          const partialText: string = (err as any)?.partialText || '';
+          const partial = partialText ? document.createElement('span') : undefined;
+          if(partial) {
+            partial.classList.add('luckgram-transcribe-partial');
+            partial.textContent = partialText;
+          }
+
+          retry.textContent = voice.getVoiceRetryText(!!partial);
           retry.addEventListener('click', (e) => {
             e.stopPropagation();
             retry.remove();
+            partial?.remove();
             const again = new SpinnerElement();
             transcribe.append(again);
             fill().finally(() => again.remove());
           }, {once: true});
-          transcribedText.prepend(retry);
+          transcribedText.prepend(...(partial ? [partial, retry] : [retry]));
         }
       };
       await fill();
