@@ -15,7 +15,7 @@ import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {LuckgramApiError, errorMessage} from '@/luckgram/core/errors';
 import {lgText} from '@/luckgram/text';
 import {holdEscape} from '@/luckgram/core/escape';
-import {RANGES, SummaryRange, parseBullets, parseSegments} from '@/luckgram/summary/logic';
+import {MAX_QUESTION_CHARS, RANGES, REFERENCE_MARK, SummaryRange, markReferences, parseBullets, parseSegments} from '@/luckgram/summary/logic';
 import SummarySession, {EmptyRangeError, SummaryProgress} from '@/luckgram/summary/session';
 
 export type SummaryCardOptions = {
@@ -24,7 +24,12 @@ export type SummaryCardOptions = {
   unreadCount?: number,
   /** goes to the message and marks it */
   onJump: (messageId: number) => void,
-  onClose: () => void
+  onClose: () => void,
+  /**
+   * Draws an answer's Markdown, as the assistant's page does (bold, lists, code). Given, not
+   * imported: the renderer is upstream's and a heavy thing to load. Without it the text is plain.
+   */
+  renderMarkdown?: (markdown: string) => DocumentFragment
 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] => {
@@ -100,6 +105,8 @@ export default class SummaryCard {
     this.field.type = 'text';
     this.field.dir = 'auto';
     this.field.placeholder = lgText('问这些消息…', 'Ask about these messages…');
+    // * a question, not a document: the request's room is for the messages it is asked about
+    this.field.maxLength = MAX_QUESTION_CHARS;
     this.field.addEventListener('keydown', (e) => {
       if(e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) {
         e.preventDefault();
@@ -146,22 +153,67 @@ export default class SummaryCard {
     this.bodyEl.replaceChildren(box);
   }
 
+  private makeReference(messageId: number) {
+    const reference = button('luckgram-summary-ref', '↗', () => this.options.onJump(messageId));
+    reference.title = lgText('跳到原消息', 'Go to the message');
+    reference.setAttribute('aria-label', reference.title);
+    return reference;
+  }
+
   /** Text with its references: each a small button that goes to its message. */
   private renderSegments(text: string, container: HTMLElement) {
     for(const segment of parseSegments(text, this.options.session.validIds)) {
-      if('text' in segment) {
-        container.append(segment.text);
-        continue;
-      }
-
-      const reference = button('luckgram-summary-ref', '↗', () => this.options.onJump(segment.messageId));
-      reference.title = lgText('跳到原消息', 'Go to the message');
-      reference.setAttribute('aria-label', reference.title);
-      container.append(reference);
+      if('text' in segment) container.append(segment.text);
+      else container.append(this.makeReference(segment.messageId));
     }
   }
 
-  private renderSummary(text: string, done: boolean) {
+  /**
+   * An answer to a question: its Markdown drawn as the assistant's page draws it, the references
+   * as buttons. The references go through the renderer as marks it leaves alone, and are put in
+   * their places after it.
+   */
+  private renderAnswer(text: string, container: HTMLElement) {
+    const render = this.options.renderMarkdown;
+    if(!render) {
+      this.renderSegments(text, container);
+      return;
+    }
+
+    let fragment: DocumentFragment;
+    try {
+      fragment = render(markReferences(text, this.options.session.validIds));
+    } catch(err) {
+      this.renderSegments(text, container);
+      return;
+    }
+
+    const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    const marked: Text[] = [];
+    for(let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if(node.nodeValue.includes('\uE000')) marked.push(node as Text);
+    }
+
+    for(const node of marked) {
+      const parts: (string | HTMLElement)[] = [];
+      let last = 0;
+      const value = node.nodeValue;
+      REFERENCE_MARK.lastIndex = 0;
+      for(let match = REFERENCE_MARK.exec(value); match; match = REFERENCE_MARK.exec(value)) {
+        if(match.index > last) parts.push(value.slice(last, match.index));
+        parts.push(this.makeReference(Number(match[1])));
+        last = match.index + match[0].length;
+      }
+
+      if(last < value.length) parts.push(value.slice(last));
+      node.replaceWith(...parts);
+    }
+
+    container.append(fragment);
+  }
+
+  /** @param onStop while it is being written: "停止" under the points, which keeps what is there */
+  private renderSummary(text: string, done: boolean, onStop?: () => void) {
     const list = el('ul', 'luckgram-summary-points');
     for(const bullet of parseBullets(text)) {
       const item = el('li', 'luckgram-summary-point');
@@ -172,6 +224,13 @@ export default class SummaryCard {
 
     list.classList.toggle('is-writing', !done);
     const answers = this.bodyEl.querySelector('.luckgram-summary-answers') || el('div', 'luckgram-summary-answers');
+    if(!done && onStop) {
+      const stop = el('div', 'luckgram-summary-stop');
+      stop.append(button('luckgram-summary-link', lgText('停止', 'Stop'), onStop));
+      this.bodyEl.replaceChildren(list, stop, answers);
+      return;
+    }
+
     this.bodyEl.replaceChildren(list, answers);
   }
 
@@ -193,7 +252,14 @@ export default class SummaryCard {
     };
 
     this.showProgress(getProgressText({stage: 'loading', loaded: 0, total: 0}), cancel);
-    let wrote = false, scheduled = false, latest = '';
+    let wrote = false, scheduled = false, latest = '', stopped = false;
+    // * "停止" once the points are being written: the writing ends, what was written stays — the
+    // * card is not closed for it, as ✕ would
+    const stop = () => {
+      if(this.run !== run || stopped) return;
+      stopped = true;
+      this.options.session.cancel();
+    };
     try {
       const text = await this.options.session.summarize(range, {
         onProgress: (progress) => {
@@ -205,9 +271,9 @@ export default class SummaryCard {
           scheduled = true;
           requestAnimationFrame(() => {
             scheduled = false;
-            if(this.run !== run || !parseBullets(latest).length) return;
+            if(this.run !== run || stopped || !parseBullets(latest).length) return;
             wrote = true;
-            this.renderSummary(latest, false);
+            this.renderSummary(latest, false, stop);
           });
         }
       });
@@ -218,6 +284,13 @@ export default class SummaryCard {
       this.footerEl.classList.remove('hide');
     } catch(err) {
       if(this.run !== run) return;
+      // * stopped by the user: the points that were written are the summary, and can be asked about
+      if(stopped && parseBullets(latest).length) {
+        this.renderSummary(latest, true);
+        this.footerEl.classList.remove('hide');
+        return;
+      }
+
       this.showError(err, () => this.summarize(range));
     } finally {
       if(this.run === run) this.busy = false;
@@ -244,7 +317,7 @@ export default class SummaryCard {
 
     const write = (text: string) => {
       a.replaceChildren();
-      this.renderSegments(text, a);
+      this.renderAnswer(text, a);
     };
 
     let scheduled = false, latest = '';

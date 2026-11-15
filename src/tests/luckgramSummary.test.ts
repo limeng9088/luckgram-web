@@ -2,7 +2,7 @@
 
 import {
   CITE_RULE, MAX_LINE_CHARS, MAX_MESSAGES, SummaryLine, buildMergeRequest, buildQuestionRequest, formatLine, formatLineTime, getLineText,
-  getRangeLimit, parseBullets, parseSegments, shouldOfferUnreadSummary, shouldShowUnreadBar, splitTranscript, takeUnreadSnapshot
+  getRangeLimit, REFERENCE_MARK, markReferences, parseBullets, parseSegments, shouldOfferUnreadSummary, shouldShowUnreadBar, splitTranscript, takeUnreadSnapshot
 } from '@/luckgram/summary/logic';
 
 const line = (id: number, text: string, sender = 'Anna'): SummaryLine => ({id, sender, time: '10-31 14:05', text});
@@ -63,6 +63,39 @@ describe('luckgram summary: the answer', () => {
     ]);
     expect(parseSegments('决定了（#789）', valid)).toEqual([{text: '决定了'}, {messageId: 789}]);
     expect(parseSegments('[#123][#123]', valid)).toEqual([{messageId: 123}, {messageId: 123}]);
+  });
+
+  test('several ids in one pair of brackets, of any kind: each is a reference (specs#189)', () => {
+    const refs = (text: string) => parseSegments(text, valid).filter((segment) => 'messageId' in segment).map((segment: any) => segment.messageId);
+    // * what the model wrote for 127 unread messages: lenticular brackets, the ids apart by commas
+    expect(parseSegments('酒吧在招聘【#123, #456, #789】', valid)).toEqual([{text: '酒吧在招聘'}, {messageId: 123}, {messageId: 456}, {messageId: 789}]);
+    expect(refs('[#123, #456]')).toEqual([123, 456]);
+    expect(refs('[#123，#456]')).toEqual([123, 456]);
+    expect(refs('[#123、#456]')).toEqual([123, 456]);
+    expect(refs('[#123 #456]')).toEqual([123, 456]);
+    expect(refs('[#123; #456；#789]')).toEqual([123, 456, 789]);
+    expect(refs('［#123，#456］')).toEqual([123, 456]);
+    expect(refs('〔#123〕')).toEqual([123]);
+    expect(refs('（#123，#456）')).toEqual([123, 456]);
+    expect(refs('(#123, #456)')).toEqual([123, 456]);
+    expect(refs('【＃123】')).toEqual([123]);
+    expect(refs('【123, 456】')).toEqual([123, 456]);
+    // * an id that is not in the range does not take the others with it
+    expect(refs('【#123, #999, #456】')).toEqual([123, 456]);
+  });
+
+  test('a reference written in a way that is not known stays as it was written, and the others still work', () => {
+    expect(parseSegments('甲 <#123>，乙 {#456}，丙 [#789]', valid)).toEqual([{text: '甲 <#123>，乙 {#456}，丙'}, {messageId: 789}]);
+    expect(parseSegments('见消息 #123 和 [#456]', valid)).toEqual([{text: '见消息 #123 和'}, {messageId: 456}]);
+    // * the request asks for one id in a pair of square brackets, and says what not to write
+    expect(CITE_RULE).toContain('[#123][#456]');
+    expect(CITE_RULE).toContain('Never put two IDs into one pair of brackets');
+  });
+
+  test('references through the Markdown renderer: marks it leaves alone', () => {
+    expect(markReferences('**结论** [#123, #456]', valid)).toBe('**结论**\uE000123\uE001\uE000456\uE001');
+    expect(markReferences('没有引用', valid)).toBe('没有引用');
+    expect('a\uE000123\uE001b'.replace(REFERENCE_MARK, '<$1>')).toBe('a<123>b');
   });
 
   test('what is not a reference stays text: a year in brackets, a footnote number that is no id', () => {
