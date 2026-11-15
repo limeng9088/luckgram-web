@@ -20,7 +20,7 @@ import type {AiChatOptions} from '@/luckgram/core/ai';
 import {lgText} from '@/luckgram/text';
 import {holdEscape} from '@/luckgram/core/escape';
 import {
-  AssistantMessage, Conversation, QUICK_BUTTONS, applyPrefix, buildContext, findInterceptor, makeId, makeTitle, newConversation
+  AssistantMessage, Conversation, QUICK_BUTTONS, applyPrefix, buildContext, countChars, findInterceptor, getTooLongText, makeId, makeTitle, newConversation
 } from '@/luckgram/assistant/logic';
 import {
   AssistantPageApi, getAssistantHeaderEntries, getAssistantInterceptors, getAssistantMessageType, getAssistantQuickButtons
@@ -36,6 +36,8 @@ export type AssistantPageOptions = {
   onBack?: () => void,
   copy?: (text: string) => void,
   confirmDelete?: (title: string) => Promise<boolean>,
+  /** how long a request may be, in characters (the server's `ai.max_input_chars`); nothing: no limit here */
+  maxInputChars?: () => number,
   now?: () => number
 };
 
@@ -207,6 +209,14 @@ export default class AssistantPage {
     this.noticeEl.classList.toggle('hide', !text);
   }
 
+  /** Whether the text is longer than a request may be; says so in the line over the field when it is. */
+  private isTooLong(text: string) {
+    const max = Number(this.options.maxInputChars?.()) || 0;
+    if(!(max > 0) || countChars(text) <= max) return false;
+    this.setNotice(lgText(...getTooLongText(max)));
+    return true;
+  }
+
   private setInput(text: string, notice?: string) {
     this.setNotice(notice);
     this.field.value = text;
@@ -244,6 +254,8 @@ export default class AssistantPage {
 
     const text = this.field.value.trim();
     if(!text) return;
+    // * longer than a request may be: not sent, and what was typed stays to be shortened
+    if(this.isTooLong(text)) return;
     this.field.value = '';
     this.onInput();
     this.send(text);
@@ -382,6 +394,7 @@ export default class AssistantPage {
   public send(text: string) {
     text = (text || '').trim();
     if(!text || this.busy) return;
+    if(this.isTooLong(text)) return;
     this.setNotice();
 
     const intercepted = findInterceptor(getAssistantInterceptors(), text);
@@ -403,7 +416,8 @@ export default class AssistantPage {
     const conversation = this.conversation;
     const run = ++this.run;
     const abort = this.abort = new AbortController();
-    const context = buildContext(conversation);
+    // * with what was said before, as much of it as a request may carry
+    const context = buildContext(conversation, undefined, Number(this.options.maxInputChars?.()) || Infinity);
     const answer = this.addMessage({role: 'assistant', type: 'text', text: '', partial: true});
     this.updateSendButton();
     const isCurrent = () => !this.destroyed && this.conversation === conversation;

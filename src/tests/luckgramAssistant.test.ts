@@ -6,7 +6,7 @@ import {IDBFactory} from 'fake-indexeddb';
 import {LuckgramIndexedDBStorage, LuckgramMemoryStorage} from '@/luckgram/core/storage';
 import {AssistantStore} from '@/luckgram/assistant/store';
 import {
-  AI_HASH, ASK_FILE_MAX_BYTES, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, canReadFile, composeAsk, composeAskText, getAskCutText, isTextFile, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
+  AI_HASH, ASK_FILE_MAX_BYTES, AssistantMessage, CONTEXT_MESSAGES, QUICK_BUTTONS, canReadFile, composeAsk, composeAskText, countChars, getAskCutText, getTooLongText, isTextFile, alignTable, applyPrefix, buildContext, conversationKey, findInterceptor,
   getConversationsToPrune, getOrphanKeys, makeId, makeTitle, markdownToEntities, newConversation, prepareMarkdown, sortConversations
 } from '@/luckgram/assistant/logic';
 import {
@@ -358,6 +358,40 @@ describe('luckgram assistant: "问 AI"', () => {
     expect(all.cut).toEqual({kept: 999, of: 'all'});
     expect(getAskCutText(all.cut)[0]).toBe('内容较长，已截取前 999 字');
     expect(all.text).toBe('z'.repeat(999) + '…\n\n');
+  });
+});
+
+describe('luckgram assistant: how long a request may be (specs#188)', () => {
+  test('characters are counted as the server counts them', () => {
+    expect(countChars('abc')).toBe(3);
+    expect(countChars('你好')).toBe(2);
+    // * an emoji is one character there, two units here
+    expect(countChars('😀😀')).toBe(2);
+    expect(countChars('')).toBe(0);
+    expect(countChars(undefined)).toBe(0);
+    expect(getTooLongText(60000)[0]).toBe('内容超过 60000 字，请删减后再发');
+  });
+
+  test('what was said before goes with a request only as far as there is room: the oldest first, the question never', () => {
+    const conversation = {messages: [
+      message('user', 'a'.repeat(400)), message('assistant', 'b'.repeat(400)),
+      message('user', 'c'.repeat(400)), message('assistant', 'd'.repeat(400)),
+      message('user', 'e'.repeat(300))
+    ]};
+    const sizes = (maxChars?: number) => buildContext(conversation, undefined, maxChars).map((item) => item.role + item.content.length);
+
+    // * room for all
+    expect(sizes(2000)).toEqual(['user400', 'assistant400', 'user400', 'assistant400', 'user300']);
+    expect(sizes()).toEqual(['user400', 'assistant400', 'user400', 'assistant400', 'user300']);
+    // * the oldest question goes, and the answer that then stands first with it
+    expect(sizes(1600)).toEqual(['user400', 'assistant400', 'user300']);
+    // * room for the question alone
+    expect(sizes(350)).toEqual(['user300']);
+    // * not even for it: it is still what is asked (the page does not let it be sent)
+    expect(sizes(100)).toEqual(['user300']);
+    // * the system instruction counts
+    expect(buildContext({system: 's'.repeat(500), messages: conversation.messages}, undefined, 1600).map((item) => item.role + item.content.length))
+    .toEqual(['system500', 'user400', 'assistant400', 'user300']);
   });
 });
 
