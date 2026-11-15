@@ -19,8 +19,12 @@ const KEY_ENDPOINT = 'api_endpoint';
 // * VPN exit shares the address): until then asking again only prolongs it, in this tab or another
 const KEY_REGISTER_RETRY_AT = 'device_register_retry_at';
 const REGISTER_RETRY_MAX_MS = 24 * 60 * 60 * 1000;
-/** Until the response's headers: an entry that does not answer by then is taken for unreachable. */
-const CONNECT_TIMEOUT_MS = 10000;
+/**
+ * Until the response's headers: an entry that does not answer by then is taken for unreachable.
+ * For a request the server answers at once. One whose headers come only when the work is done
+ * (a transcription, a picture) says how long that may take: `timeoutMs`.
+ */
+export const CONNECT_TIMEOUT_MS = 10000;
 const APP_VERSION_HEADER = 'X-Luckgram-App-Version';
 
 // * set by scripts/luckgram/vite-plugin.mjs: the entries of this build, the main one first
@@ -37,7 +41,13 @@ export type LuckgramRequest = {
   accept?: string,
   signal?: AbortSignal,
   /** false for the registration itself */
-  authorized?: boolean
+  authorized?: boolean,
+  /**
+   * How long the server may work before it answers (to the response's headers), when that is
+   * longer than an entry gets to be reached. Such a request is not sent to another entry once
+   * its time is up: the first one was reached and may have done the work (and counted it).
+   */
+  timeoutMs?: number
 };
 
 export type LuckgramApiOptions = {
@@ -119,10 +129,11 @@ export class LuckgramApi {
       const onAbort = () => controller.abort();
       request.signal?.addEventListener('abort', onAbort);
       let timedOut = false;
+      const isLong = request.timeoutMs > CONNECT_TIMEOUT_MS;
       const timeout = setTimeout(() => {
         timedOut = true;
         controller.abort();
-      }, CONNECT_TIMEOUT_MS);
+      }, isLong ? request.timeoutMs : CONNECT_TIMEOUT_MS);
 
       try {
         const response = await this.fetch(base + request.path, {
@@ -142,6 +153,9 @@ export class LuckgramApi {
         return response;
       } catch(err) {
         if(request.signal?.aborted && !timedOut) throw new LuckgramApiError(LuckgramApiError.CANCELLED);
+        // * a long request that ran out of time is not an entry that cannot be reached: an entry that
+        // * cannot fails at once (DNS, connection, TLS). Sent again elsewhere, the work would be done twice
+        if(timedOut && isLong) throw new LuckgramApiError(LuckgramApiError.TIMEOUT);
         // * the entry could not be reached (DNS, connection, TLS, no answer in time): the next one
       } finally {
         clearTimeout(timeout);
