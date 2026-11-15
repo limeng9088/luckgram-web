@@ -2050,6 +2050,12 @@ body.luckgram-ai-open {
   }
 }
 
+// * a template in a bot's list of commands: its text starts where a command's does — after the room of
+// * the command's picture (upstream's row: .75rem, the picture, .875rem)
+.commands-helper-list .luckgram-replies-helper-item {
+  padding-inline-start: calc(.75rem + var(--luckgram-command-avatar, 30px) + .875rem);
+}
+
 // * "管理"
 .luckgram-replies-list {
   padding: 0 .5rem;

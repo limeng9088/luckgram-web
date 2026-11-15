@@ -285,10 +285,32 @@ export default class LuckgramQuickReplies {
       const rows = found.map((item) => makeReplyRow(item, list.ownerDocument));
       rows[0].classList.add('is-after-commands');
       list.append(...rows);
-      this.slashHelper.toggle(true);
+      // * the templates' own panel gives way — told as the controller tells it (`fromController`): a
+      // * panel that hides by itself has the controller hide the others, and the commands went with it
+      // * (specs#190: "/" in a bot's chat showed nothing). At once, without its fade: the commands'
+      // * panel takes its place in the same moment
+      this.slashHelper.toggle(true, true, true);
+      this.showAtOnce((this.commandsHelper as any)?.container);
     } catch(err) {
       console.warn('[luckgram] quick replies: commands', (err as Error)?.message);
     }
+  }
+
+  /**
+   * The panel that takes the place of another is there at once: the one coming in while the one
+   * before goes out read as a jump (the two are of different heights).
+   */
+  private showAtOnce(container: HTMLElement | undefined) {
+    if(!container) return;
+    try {
+      container.style.setProperty('transition', 'none', 'important');
+      container.style.setProperty('animation', 'none', 'important');
+      void container.offsetHeight;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        container.style.removeProperty('transition');
+        container.style.removeProperty('animation');
+      }));
+    } catch(err) {}
   }
 
   /** A press, or Enter, on a row of the commands' list: one of the templates there is put into the field. */
