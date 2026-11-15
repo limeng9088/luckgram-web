@@ -76,6 +76,17 @@ export const FEATURES: LuckgramFeature[] = [
     description: ['输入框旁的按钮：说话，转成文字插入光标处', 'A button by the message field: speak, and the words are inserted at the cursor']
   },
 
+  {
+    key: 'save_to_saved', group: 'messages', default: true,
+    title: ['一键收藏', 'Save in one press'],
+    description: ['消息菜单和多选栏里的「收藏」：直接存到「我的收藏」', '"Save" in a message\'s menu and in the selection\'s bar: straight to Saved Messages']
+  },
+  {
+    key: 'select_all_from_sender', group: 'messages', default: true,
+    title: ['全选某人的消息', 'Select all from one sender'],
+    description: ['消息菜单里的「全选 … 的消息」：选中这个人在当前聊天里的全部消息，再复制、转发、收藏或删除', '"Select all messages from …" in a message\'s menu: every message of that sender in the chat, to copy, forward, save or delete']
+  },
+
   // ---- 资料 / Profiles
   {
     key: 'user_notes', group: 'profiles', default: true,

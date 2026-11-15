@@ -19,7 +19,9 @@ export default async function showDeleteMessagesPopup(
   mids: number[],
   type: ChatType,
   onConfirm?: () => void,
-  threadId?: number
+  threadId?: number,
+  /** Luckgram (specs#190): what deletes instead of this popup, once it is confirmed — a long selection, in batches */
+  luckgramPerform?: (options: {peerId: PeerId, mids: number[], revoke: boolean, canRevoke: number[]}) => void
 ) {
   mids = mids.slice();
 
@@ -66,6 +68,11 @@ export default async function showDeleteMessagesPopup(
     checked: PopupPeerButtonCallbackCheckboxes,
     revoke?: boolean
   ) => {
+    if(luckgramPerform && type !== ChatType.Scheduled && type !== ChatType.Welcome) {
+      luckgramPerform({peerId, mids, revoke: !!checked.size || !!revoke, canRevoke});
+      return;
+    }
+
     onConfirm?.();
     if(type === ChatType.Scheduled) {
       managers.appMessagesManager.deleteScheduledMessages(peerId, mids);
