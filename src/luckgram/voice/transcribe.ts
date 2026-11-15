@@ -25,7 +25,7 @@ import {DecodeError, decodeToSpeech} from '@/luckgram/voice/decode';
 import {
   DEFAULT_MAX_MB, FREE_TRANSCRIBE, KEY_MAX_MB, VoiceFailure, getMaxBytes, getVoiceFailure, getVoiceFailureText, voiceKey
 } from '@/luckgram/voice/logic';
-import {transcribeInPieces} from '@/luckgram/voice/pieces';
+import {PieceResult, transcribeInPieces} from '@/luckgram/voice/pieces';
 
 export class VoiceError extends Error {
   constructor(public failure: VoiceFailure) {
@@ -46,14 +46,14 @@ export const getVoiceRetryText = () => lgText('转写失败 · 重试', 'Transcr
  */
 export function transcribeBlob(
   blob: Blob,
-  options: {forceDecode?: boolean, maxBytes?: number, durationSeconds?: number, send?: (piece: Blob) => Promise<string>, decode?: (blob: Blob) => Promise<Float32Array>} = {}
+  options: {forceDecode?: boolean, maxBytes?: number, durationSeconds?: number, send?: (piece: Blob, language?: string) => Promise<string | PieceResult>, decode?: (blob: Blob) => Promise<Float32Array>} = {}
 ): Promise<string> {
   return transcribeInPieces(blob, {
     forceDecode: options.forceDecode,
     durationSeconds: options.durationSeconds,
     maxBytes: options.maxBytes ?? getMaxBytes(remoteNumber(KEY_MAX_MB, DEFAULT_MAX_MB)),
     // * a Chinese interface says which script it reads: Simplified or Traditional
-    send: options.send ?? (async(piece: Blob) => (await luckgramAI.transcribe(piece, {script: luckgramChineseScript()})).text),
+    send: options.send ?? ((piece: Blob, language?: string) => luckgramAI.transcribe(piece, {script: luckgramChineseScript(), language})),
     decode: options.decode ?? decodeToSpeech
   });
 }

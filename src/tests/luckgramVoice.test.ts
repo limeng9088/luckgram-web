@@ -68,6 +68,33 @@ describe('luckgram voice: what is sent', () => {
     expect(sent[0].type).toBe('audio/ogg');
   });
 
+  test('the pieces after the first are told the language the first was heard as (specs#186: a piece taken for Welsh)', async() => {
+    const {transcribeInPieces, getPieceLanguage} = await import('@/luckgram/voice/pieces');
+    const decode = async() => new Float32Array(5 * 60 * PIECE_SAMPLE_RATE);
+    const blob = new Blob([new Uint8Array(600 * 1024)], {type: 'audio/ogg'});
+    const run = async(answers: {text: string, language?: string}[]) => {
+      const asked: (string | undefined)[] = [];
+      const text = await transcribeInPieces(blob, {maxBytes: getMaxBytes(4), durationSeconds: 300, decode, send: async(_piece, language) => {
+        asked.push(language);
+        return answers[asked.length - 1];
+      }});
+      return {asked, text};
+    };
+
+    // * the first says Chinese: the second and the third are asked in Chinese
+    expect((await run([{text: '第一段', language: 'zh'}, {text: '第二段', language: 'zh'}, {text: '第三段', language: 'zh'}])).asked).toEqual([undefined, 'zh', 'zh']);
+    // * what a later piece says of itself changes nothing
+    expect((await run([{text: 'one', language: 'EN'}, {text: 'two', language: 'cy'}, {text: 'three'}])).asked).toEqual([undefined, 'en', 'en']);
+    // * a first piece without words (a pause) says nothing to go by: the next one with words does
+    expect((await run([{text: ' ', language: 'cy'}, {text: '第二段', language: 'zh'}, {text: '第三段'}])).asked).toEqual([undefined, undefined, 'zh']);
+    // * no language in the answer, or not a two-letter code: the pieces are heard on their own, as before
+    expect((await run([{text: 'a'}, {text: 'b', language: 'chinese'}, {text: 'c'}])).asked).toEqual([undefined, undefined, undefined]);
+
+    expect(getPieceLanguage({text: '你好', language: 'zh'})).toBe('zh');
+    expect(getPieceLanguage({text: '', language: 'zh'})).toBeUndefined();
+    expect(getPieceLanguage({text: 'hi', language: ''})).toBeUndefined();
+  });
+
   test('pieces of about two minutes, each under the limit, covering every sample once', () => {
     const max = getMaxBytes(4);
     const perPiece = getSamplesPerPiece(max);
