@@ -49,6 +49,18 @@ function listenOnce() {
   document.getElementById('folders-container')?.addEventListener('click', () => {
     if(page) closeAssistant({keepColumn: true});
   }, true);
+
+  // * the window got narrow with the page open: one column is on screen now, and upstream leaves there
+  // * the one it had marked as active — the chat list, when no chat was open under the page, with the
+  // * page off screen beside it. The page's column is brought on screen, as when it is opened narrow
+  mediaSizes.addEventListener('changeScreen', () => {
+    if(!page || !mediaSizes.isMobile) return;
+    if(document.body.classList.contains(LEFT_COLUMN_ACTIVE_CLASSNAME)) {
+      // * Back then goes to the list, where a narrow window would have come from
+      cameFromList = true;
+      appImManager.selectTab(APP_TABS.CHAT);
+    }
+  });
 }
 
 /** Opens the assistant's page, or brings the open one forward. Nothing when the feature is off or held back. */
