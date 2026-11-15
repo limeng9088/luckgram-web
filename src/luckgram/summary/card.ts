@@ -14,6 +14,7 @@
 import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {LuckgramApiError, errorMessage} from '@/luckgram/core/errors';
 import {lgText} from '@/luckgram/text';
+import {holdEscape} from '@/luckgram/core/escape';
 import {RANGES, SummaryRange, parseBullets, parseSegments} from '@/luckgram/summary/logic';
 import SummarySession, {EmptyRangeError, SummaryProgress} from '@/luckgram/summary/session';
 
@@ -72,6 +73,7 @@ export default class SummaryCard {
   private run = 0;
   private busy = false;
   private closed = false;
+  private releaseEscape: () => void;
 
   constructor(private options: SummaryCardOptions) {
     const card = this.element = el('div', 'luckgram-summary-card');
@@ -110,6 +112,7 @@ export default class SummaryCard {
     this.footerEl.append(el('div', 'luckgram-summary-note', lgText('AI 生成，可能有误', 'Written by AI. It may be wrong')), row);
 
     card.append(header, this.bodyEl, this.footerEl);
+    this.holdEscape(true);
   }
 
   // ------------------------------------------------------------------ states
@@ -275,6 +278,17 @@ export default class SummaryCard {
     this.element.classList.toggle('is-folded', folded);
     this.foldButton.textContent = folded ? '▸' : '▾';
     this.foldButton.setAttribute('aria-label', folded ? lgText('展开', 'Unfold') : lgText('收起', 'Fold'));
+    this.holdEscape(!folded);
+  }
+
+  /**
+   * Esc folds the open card and goes no further (upstream would close the chat under it). It folds,
+   * not closes: a summary that took a request to make should not go by a slip — ✕ closes it. The
+   * folded line leaves Esc to the chat.
+   */
+  private holdEscape(hold: boolean) {
+    this.releaseEscape?.();
+    this.releaseEscape = hold && !this.closed ? holdEscape(() => this.setFolded(true)) : undefined;
   }
 
   public unfold() {
@@ -292,6 +306,7 @@ export default class SummaryCard {
   public close() {
     if(this.closed) return;
     this.closed = true;
+    this.holdEscape(false);
     ++this.run;
     this.options.session.cancel();
     this.element.remove();
