@@ -2157,6 +2157,17 @@ export class AppDialogsManager {
   }
 
   /** Luckgram (specs#191): the folder whose list the row is of, when it is a keyword folder. */
+  /**
+   * Luckgram (specs#191): marks the keywords in a row's preview as it stands now, for a row of the keyword
+   * folder `filterId` (nothing for any other folder). What is marked already is left alone.
+   */
+  public luckgramMarkPreview(dialogElement: DialogElement, filterId: number) {
+    const matcher = getKeywordMatcher(filterId);
+    const parts = matcher && dialogElement?.dom?.lastMessageRenderParts;
+    const last = parts?.[parts.length - 1];
+    if(last instanceof HTMLElement && dialogElement.dom.lastMessageSpan?.contains(last)) markKeywords(last, matcher);
+  }
+
   private luckgramGetRowFilterId(peerId: PeerId, dialogElement: DialogElement): number | undefined {
     for(const filterId in this.xds) {
       if(isLocalFolderId(+filterId) && this.xds[filterId].getDialogElement(peerId) === dialogElement) return +filterId;
