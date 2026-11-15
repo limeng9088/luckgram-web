@@ -1,3 +1,4 @@
+import {vi} from 'vitest';
 // * Luckgram Web (luckgram-specs#186, W6): free transcription — what is sent, in how many pieces
 
 import {
@@ -27,6 +28,177 @@ describe('luckgram voice: what is sent', () => {
     expect(shouldSendAsIs('video/mp4', 1 * MB, max)).toBe(false);
     expect(shouldSendAsIs(undefined, 1 * MB, max)).toBe(false);
     expect(shouldSendAsIs('audio/ogg', 0, max)).toBe(false);
+  });
+
+  test('a recording over three minutes is cut into pieces even when its file is small (specs#186)', () => {
+    const max = getMaxBytes(4);
+    // * Opus: twenty minutes fit 4 MB, and the server has a minute to answer a request
+    expect(shouldSendAsIs('audio/ogg', 3 * MB, max, 20 * 60)).toBe(false);
+    expect(shouldSendAsIs('audio/ogg', 400 * 1024, max, 181)).toBe(false);
+    expect(shouldSendAsIs('audio/ogg', 400 * 1024, max, 180)).toBe(true);
+    expect(shouldSendAsIs('audio/ogg', 3 * MB, max, 28)).toBe(true);
+    // * the size limit still holds for a short one
+    expect(shouldSendAsIs('audio/ogg', 5 * MB, max, 28)).toBe(false);
+    // * no length known: as it is only while the file is small
+    expect(shouldSendAsIs('audio/webm', 1 * MB, max)).toBe(true);
+    expect(shouldSendAsIs('audio/webm', 1 * MB + 1, max)).toBe(false);
+    expect(shouldSendAsIs('audio/webm', 2 * MB, max, 0)).toBe(false);
+
+    // * a piece is two minutes at most, whatever size the server allows
+    expect(getSamplesPerPiece(getMaxBytes(4)) / PIECE_SAMPLE_RATE).toBeLessThanOrEqual(120);
+    expect(getSamplesPerPiece(25 * MB) / PIECE_SAMPLE_RATE).toBe(120);
+    expect(getSamplesPerPiece(1 * MB) / PIECE_SAMPLE_RATE).toBeLessThan(40);
+  });
+
+  test('a long voice message: decoded and sent piece by piece, each two minutes at most', async() => {
+    const {transcribeInPieces} = await import('@/luckgram/voice/pieces');
+    const sent: Blob[] = [];
+    const send = async(piece: Blob) => (sent.push(piece), 'p' + sent.length);
+    // * 7 minutes of sound in a small Opus file
+    const decode = async() => new Float32Array(7 * 60 * PIECE_SAMPLE_RATE);
+    const blob = new Blob([new Uint8Array(900 * 1024)], {type: 'audio/ogg'});
+
+    expect(await transcribeInPieces(blob, {maxBytes: getMaxBytes(4), durationSeconds: 7 * 60, send, decode})).toBe('p1 p2 p3 p4');
+    expect(sent.map((piece) => piece.type)).toEqual(['audio/wav', 'audio/wav', 'audio/wav', 'audio/wav']);
+    for(const piece of sent) expect((piece.size - 44) / 2 / PIECE_SAMPLE_RATE).toBeLessThanOrEqual(120);
+
+    // * a short one of the same size goes as it is, in one request
+    sent.length = 0;
+    await transcribeInPieces(blob, {maxBytes: getMaxBytes(4), durationSeconds: 28, send, decode});
+    expect(sent.length).toBe(1);
+    expect(sent[0].type).toBe('audio/ogg');
+  });
+
+  test('the pieces after the first are told the language the first was heard as (specs#186: a piece taken for Welsh)', async() => {
+    const {transcribeInPieces, getPieceLanguage} = await import('@/luckgram/voice/pieces');
+    const decode = async() => new Float32Array(5 * 60 * PIECE_SAMPLE_RATE);
+    const blob = new Blob([new Uint8Array(600 * 1024)], {type: 'audio/ogg'});
+    const run = async(answers: {text: string, language?: string}[]) => {
+      const asked: (string | undefined)[] = [];
+      const text = await transcribeInPieces(blob, {maxBytes: getMaxBytes(4), durationSeconds: 300, decode, send: async(_piece, language) => {
+        asked.push(language);
+        return answers[asked.length - 1];
+      }});
+      return {asked, text};
+    };
+
+    // * the first says Chinese: the second and the third are asked in Chinese
+    expect((await run([{text: '第一段', language: 'zh'}, {text: '第二段', language: 'zh'}, {text: '第三段', language: 'zh'}])).asked).toEqual([undefined, 'zh', 'zh']);
+    // * what a later piece says of itself changes nothing
+    expect((await run([{text: 'one', language: 'EN'}, {text: 'two', language: 'cy'}, {text: 'three'}])).asked).toEqual([undefined, 'en', 'en']);
+    // * a first piece without words (a pause) says nothing to go by: the next one with words does
+    expect((await run([{text: ' ', language: 'cy'}, {text: '第二段', language: 'zh'}, {text: '第三段'}])).asked).toEqual([undefined, undefined, 'zh']);
+    // * no language in the answer, or not a two-letter code: the pieces are heard on their own, as before
+    expect((await run([{text: 'a'}, {text: 'b', language: 'chinese'}, {text: 'c'}])).asked).toEqual([undefined, undefined, undefined]);
+
+    expect(getPieceLanguage({text: '你好', language: 'zh'})).toBe('zh');
+    expect(getPieceLanguage({text: '', language: 'zh'})).toBeUndefined();
+    expect(getPieceLanguage({text: 'hi', language: ''})).toBeUndefined();
+  });
+
+  test('a piece that fails is asked once more; what is done is kept and gone on from (specs#186)', async() => {
+    const {transcribeInPieces, PartialTranscription, isRetryablePieceError} = await import('@/luckgram/voice/pieces');
+    const decode = async() => new Float32Array(5 * 60 * PIECE_SAMPLE_RATE);
+    const blob = new Blob([new Uint8Array(600 * 1024)], {type: 'audio/ogg'});
+    const fail = (code: string) => Object.assign(new Error(code), {code});
+    /** `plan[n]`: what the n-th call does — a text, or an error's code */
+    const make = (plan: (string | {error: string})[]) => {
+      const asked: (string | undefined)[] = [];
+      const send = async(_piece: Blob, language?: string) => {
+        const step = plan[asked.length];
+        asked.push(language);
+        if(typeof(step) !== 'string') throw fail(step.error);
+        return {text: step, language: 'zh'};
+      };
+      return {asked, send};
+    };
+    const base = {maxBytes: getMaxBytes(4), durationSeconds: 300, decode};
+
+    expect(isRetryablePieceError(fail('timeout'))).toBe(true);
+    expect(isRetryablePieceError(fail('network_error'))).toBe(true);
+    expect(isRetryablePieceError(fail('upstream_unavailable'))).toBe(true);
+    expect(isRetryablePieceError(fail('content_rejected'))).toBe(false);
+    expect(isRetryablePieceError(fail('quota_exceeded'))).toBe(false);
+    expect(isRetryablePieceError(fail('input_too_large'))).toBe(false);
+    expect(isRetryablePieceError(new Error('x'))).toBe(false);
+
+    // * the second piece gets a 503 once: asked again, and the whole is there — 4 calls for 3 pieces
+    const once = make(['一', {error: 'upstream_unavailable'}, '二', '三']);
+    expect(await transcribeInPieces(blob, {...base, send: once.send})).toBe('一二三');
+    expect(once.asked).toEqual([undefined, 'zh', 'zh', 'zh']);
+
+    // * it fails twice: the first piece is kept, with what it takes to go on
+    const twice = make(['一', {error: 'timeout'}, {error: 'network_error'}]);
+    const error: any = await transcribeInPieces(blob, {...base, send: twice.send}).catch((err) => err);
+    expect(error).toBeInstanceOf(PartialTranscription);
+    expect(error.text).toBe('一');
+    expect(error.cause.code).toBe('network_error');
+    expect(error.done.texts).toEqual(['一']);
+    expect(error.done.language).toBe('zh');
+    expect(twice.asked.length).toBe(3);
+
+    // * asked again: only the second and the third piece are sent, in the first one's language
+    const again = make(['二', '三']);
+    expect(await transcribeInPieces(blob, {...base, send: again.send, resume: error.done})).toBe('一二三');
+    expect(again.asked).toEqual(['zh', 'zh']);
+
+    // * the quota is not asked twice, and what is done still stands
+    const quota = make(['一', '二', {error: 'quota_exceeded'}]);
+    const stopped: any = await transcribeInPieces(blob, {...base, send: quota.send}).catch((err) => err);
+    expect(stopped).toBeInstanceOf(PartialTranscription);
+    expect(stopped.text).toBe('一二');
+    expect(quota.asked.length).toBe(3);
+
+    // * the first piece fails for good: nothing is done, the error is the piece's own
+    const first = make([{error: 'timeout'}, {error: 'timeout'}]);
+    expect(await transcribeInPieces(blob, {...base, send: first.send}).catch((err) => err)).toMatchObject({code: 'timeout'});
+    expect(first.asked.length).toBe(2);
+
+    // * pieces cut another way (the server's size limit changed) are not gone on from: all over again
+    const other = make(['a', 'b', 'c']);
+    expect(await transcribeInPieces(blob, {...base, send: other.send, resume: {...error.done, samplesPerPiece: 1}})).toBe('a b c');
+    expect(other.asked.length).toBe(3);
+
+    // * a recording sent as it is: asked once more too
+    const whole = make([{error: 'timeout'}, '整条']);
+    expect(await transcribeInPieces(blob, {...base, durationSeconds: 28, send: whole.send})).toBe('整条');
+    expect(whole.asked.length).toBe(2);
+  });
+
+  test('a message drawn while it was being sent is transcribed as the server has it (specs#186)', async() => {
+    const {waitForSentMessage} = await import('@/luckgram/voice/sent');
+    const isTempId = (mid: number) => !Number.isInteger(mid);
+    const local = {mid: 100.5, peerId: 7, pFlags: {is_outgoing: true as const}};
+    const sent = {mid: 101, peerId: 7, pFlags: {}};
+    const noEvents = () => () => {};
+
+    // * a message that was received, or sent long ago: itself, nothing is asked
+    const asked = vi.fn();
+    expect(await waitForSentMessage({message: sent, isTempId, getBubbleMid: asked, getMessage: asked, subscribe: asked, timeoutMs: 10})).toBe(sent);
+    expect(asked).not.toHaveBeenCalled();
+
+    // * already sent, the bubble has its new id: the stored message of that id
+    expect(await waitForSentMessage({
+      message: local, isTempId, getBubbleMid: () => 101, getMessage: async(mid) => mid === 101 ? sent : undefined, subscribe: noEvents, timeoutMs: 10
+    })).toBe(sent);
+
+    // * still on its way: waited for, and only its own "sent" counts
+    let emit: (tempId: number, message: any) => void, stopped = false;
+    const waiting = waitForSentMessage({
+      message: local, isTempId, getBubbleMid: () => 100.5, getMessage: async(): Promise<typeof sent> => undefined, timeoutMs: 5000,
+      subscribe: (listener) => (emit = listener, () => stopped = true)
+    });
+    await Promise.resolve();
+    emit(55.5, {mid: 56, peerId: 7, pFlags: {}});
+    emit(100.5, {mid: 101, peerId: 8, pFlags: {}});
+    emit(100.5, sent);
+    expect(await waiting).toBe(sent);
+    expect(stopped).toBe(true);
+
+    // * never sent: given up, with nothing
+    expect(await waitForSentMessage({
+      message: local, isTempId, getBubbleMid: () => 100.5, getMessage: async(): Promise<typeof sent> => undefined, subscribe: noEvents, timeoutMs: 20
+    })).toBeUndefined();
   });
 
   test('pieces of about two minutes, each under the limit, covering every sample once', () => {
@@ -74,6 +246,8 @@ describe('luckgram voice: what is sent', () => {
   test('errors: what the user is told', () => {
     expect(getVoiceFailure('quota_exceeded', true)).toBe('quota');
     expect(getVoiceFailure('network_error', true)).toBe('network');
+    expect(getVoiceFailure('timeout', true)).toBe('timeout');
+    expect(getVoiceFailureText('timeout')[0]).toBe('转写超时，请稍后重试');
     expect(getVoiceFailure('upstream_unavailable', false)).toBe('network');
     expect(getVoiceFailure('upstream_unavailable', true)).toBe('other');
     expect(getVoiceFailure(undefined, true, true)).toBe('unsupported');

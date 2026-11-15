@@ -495,6 +495,12 @@ body.has-auth-pages {
   text-underline-offset: 2px;
 }
 
+// * the part of a long recording that was transcribed before a piece failed: the retry line after it, on its own line
+.luckgram-transcribe-partial {
+  display: block;
+  margin-block-end: .25rem;
+}
+
 // * dictation: its button beside the emoji button, and the bar over the field while it listens
 .luckgram-dictation {
   flex: 0 0 auto;
