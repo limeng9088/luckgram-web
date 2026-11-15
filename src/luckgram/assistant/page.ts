@@ -18,6 +18,7 @@ import {attachClickEvent} from '@helpers/dom/clickEvent';
 import {LuckgramApiError, errorMessage} from '@/luckgram/core/errors';
 import type {AiChatOptions} from '@/luckgram/core/ai';
 import {lgText} from '@/luckgram/text';
+import {holdEscape} from '@/luckgram/core/escape';
 import {
   AssistantMessage, Conversation, QUICK_BUTTONS, applyPrefix, buildContext, findInterceptor, makeId, makeTitle, newConversation
 } from '@/luckgram/assistant/logic';
@@ -72,6 +73,8 @@ export default class AssistantPage {
   private abort: AbortController;
   private run = 0;
   private destroyed = false;
+  private closeMenu: () => void;
+  private historyEscape: () => void;
   private now: () => number;
 
   constructor(private options: AssistantPageOptions) {
@@ -331,10 +334,10 @@ export default class AssistantPage {
     if(!message?.text || !window.getSelection()?.isCollapsed) return;
 
     e.preventDefault();
-    this.element.querySelector('.luckgram-ai-menu')?.remove();
+    this.closeMenu?.();
     const menu = el('div', 'luckgram-ai-menu');
     const copy = button('luckgram-ai-menu-item', lgText('复制', 'Copy'), () => {
-      menu.remove();
+      close();
       this.options.copy ? this.options.copy(message.text) : navigator.clipboard?.writeText(message.text).catch(() => {});
     });
     menu.append(copy);
@@ -343,15 +346,19 @@ export default class AssistantPage {
     menu.style.insetBlockStart = Math.max(8, Math.min(e.clientY - rect.top, rect.height - 56)) + 'px';
     this.element.append(menu);
 
-    const close = (event: Event) => {
-      if(event.type === 'keydown' && (event as KeyboardEvent).key !== 'Escape') return;
-      if(event.type === 'pointerdown' && menu.contains(event.target as Node)) return;
+    // * Esc closes the menu, not the page under it
+    const close = () => {
       menu.remove();
-      document.removeEventListener('pointerdown', close, true);
-      document.removeEventListener('keydown', close, true);
+      document.removeEventListener('pointerdown', onDown, true);
+      release();
+      if(this.closeMenu === close) this.closeMenu = undefined;
     };
-    document.addEventListener('pointerdown', close, true);
-    document.addEventListener('keydown', close, true);
+    const onDown = (event: Event) => {
+      if(!menu.contains(event.target as Node)) close();
+    };
+    const release = holdEscape(close);
+    this.closeMenu = close;
+    document.addEventListener('pointerdown', onDown, true);
   }
 
   // ------------------------------------------------------------------ asking
@@ -459,6 +466,9 @@ export default class AssistantPage {
 
   private toggleHistory(open = this.historyEl.classList.contains('hide')) {
     this.historyEl.classList.toggle('hide', !open);
+    // * Esc goes back from the history to the conversation before it leaves the page
+    this.historyEscape?.();
+    this.historyEscape = open ? holdEscape(() => this.toggleHistory(false)) : undefined;
     this.historyButton.classList.toggle('is-active', open);
     this.historyButton.setAttribute('aria-expanded', String(open));
     if(open) this.renderHistory();
@@ -502,6 +512,8 @@ export default class AssistantPage {
 
   public destroy() {
     this.destroyed = true;
+    this.closeMenu?.();
+    this.historyEscape?.();
     this.stop();
     this.element.remove();
   }

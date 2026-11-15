@@ -382,7 +382,11 @@ export default class ChatInput {
           rootScope.removeEventListener('app_config', update);
         };
       },
-      onSubmit: () => {void this.sendMessage();},
+      onSubmit: () => {
+        // * Luckgram (W11): Enter on a "/…" that asks for a quick reply puts it in, before its suggestions are up
+        if(this.luckgramQuickReplies?.takeEnter()) return;
+        void this.sendMessage();
+      },
       onInput: this.onMessageInput,
       onHeightChange: (height) => {this.messageInputNaturalHeight = height; this.notifyChatInputHeight();},
       onExpandedChange: (expanded) => {

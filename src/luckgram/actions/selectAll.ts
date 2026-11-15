@@ -2,7 +2,7 @@
  * Luckgram Web (luckgram-specs#190, W11a 需求 4、5; specs/14-select-all.md): "全选 … 的消息" —
  * upstream's own multi-select entered, and filled with every message of one sender in this chat as
  * they are read from the server, page by page (`messages.search` by `from_id`, through upstream's
- * manager). The line at the page's foot counts them and can cancel: the selection goes with it.
+ * manager; in a private chat and in Saved Messages the history itself, filtered here). The line at the page's foot counts them and can cancel: the selection goes with it.
  */
 
 import type Chat from '@components/chat/chat';
@@ -73,6 +73,20 @@ export async function selectAllFromSender(chat: Chat, message: Message.message) 
     const result = await collectSenderMessages({
       signal,
       loadPage: async(offsetId) => {
+        // * a private chat (Saved Messages is one): the search by sender finds nothing there, so the
+        // * history itself is read and the sender's are picked out of each page
+        if(peerId.isUser()) {
+          const page = await managers.appMessagesManager.getHistory({peerId, threadId, offsetId, limit: BATCH_SIZE});
+          const raw = page?.history || [];
+          const messages = await Promise.all(raw.map((mid) => managers.appMessagesManager.getMessageByPeer(peerId, mid)));
+          const isSaved = peerId === rootScope.myId, wantOut = senderId === rootScope.myId;
+          const mids = raw.filter((_mid, index) => {
+            const item = messages[index] as Message.message;
+            return item?._ === 'message' && (isSaved || !!item.pFlags?.out === wantOut);
+          });
+          return {mids, end: !raw.length || !!page.isEnd?.top, next: raw.length ? Math.min(...raw) : undefined};
+        }
+
         const page = await managers.appMessagesManager.getHistory({
           peerId,
           threadId,

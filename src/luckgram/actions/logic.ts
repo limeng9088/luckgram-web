@@ -62,11 +62,20 @@ export function getSelectAllText(of: {isOwn: boolean, isPrivate: boolean, name?:
   return [`全选 ${name} 的消息`, `Select all messages from ${name}`];
 }
 
-export type SenderPage = {mids: number[], end: boolean};
+export type SenderPage = {
+  mids: number[],
+  end: boolean,
+  /**
+   * Where the next page starts, when the page was read from the whole history and `mids` is only
+   * what of it is the sender's: a page with none of theirs is not the end then.
+   */
+  next?: number
+};
 
 /**
  * Every message of one sender in a chat, read page by page from the newest (`messages.search` by
- * `from_id`). `onPage` is given each page as it comes; cancelling stops before the next one.
+ * `from_id`; in a private chat, where that search finds nothing, the history itself with the
+ * sender's picked out of each page). `onPage` is given each page as it comes; cancelling stops before the next one.
  * @returns how many were read, and whether it was cancelled
  */
 export async function collectSenderMessages(options: {
@@ -86,8 +95,16 @@ export async function collectSenderMessages(options: {
     const fresh = (result?.mids || []).filter((mid) => !seen.has(mid));
     for(const mid of fresh) seen.add(mid);
     if(fresh.length) options.onPage(fresh, seen.size);
+    if(result.end) break;
+    if(result.next !== undefined) {
+      // * a page that does not go further back would be asked for again and again
+      if(offsetId && result.next >= offsetId) break;
+      offsetId = result.next;
+      continue;
+    }
+
     // * a page with nothing new would be asked for again and again
-    if(!fresh.length || result.end) break;
+    if(!fresh.length) break;
     offsetId = Math.min(...fresh);
   }
 

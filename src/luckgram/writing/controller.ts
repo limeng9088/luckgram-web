@@ -31,6 +31,7 @@ import {AI_REPLY, AI_WRITING, ORDER_EFFECTS, ORDER_TRANSLATE, WRITING_EFFECTS, W
 import {AiMenuItem, AiWritingHost, getAiMenuItems} from '@/luckgram/writing/registry';
 import {registerAiWritingFeatures} from '@/luckgram/writing/features';
 import {NARROW_QUERY, isTranslateInAiMenu} from '@/luckgram/writing/narrow';
+import {holdEscape} from '@/luckgram/core/escape';
 
 type Draft = {text: string, entities: TranslationEntity[]};
 
@@ -39,6 +40,7 @@ export default class LuckgramAiWriting {
   private notice: HTMLElement;
   private panel: HTMLElement;
   private panelOnClose: () => void;
+  private panelEscape: () => void;
   private previous: Draft;
   private resultText: string;
   private peerId: PeerId;
@@ -367,18 +369,11 @@ export default class LuckgramAiWriting {
     if(row?.parentElement) row.parentElement.insertBefore(element, row);
   }
 
-  /** Ctrl/⌘+Z right after a rewrite gives the previous text back; Esc closes the panel. */
+  /** Ctrl/⌘+Z right after a rewrite gives the previous text back. (Esc for the panel: showPanel.) */
   private bindKeys() {
     if(this.keysBound || !this.input.rowsWrapper) return;
     this.keysBound = true;
     this.input.rowsWrapper.addEventListener('keydown', (e: KeyboardEvent) => {
-      if(e.key === 'Escape' && this.panel) {
-        e.preventDefault();
-        e.stopPropagation();
-        this.hidePanel();
-        return;
-      }
-
       const isUndo = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'z';
       // * only while the field still holds the result untouched: after that the keys are the editor's own
       if(isUndo && this.previous && this.getDraft().text === this.resultText) {
@@ -399,11 +394,15 @@ export default class LuckgramAiWriting {
     this.panelOnClose = onClose;
     this.insertOverField(panel);
     this.bindKeys();
+    // * Esc closes the panel and nothing behind it (upstream would close the chat)
+    this.panelEscape = holdEscape(() => this.hidePanel(), () => panel.isConnected);
   }
 
   private hidePanel() {
     const onClose = this.panelOnClose;
     this.panelOnClose = undefined;
+    this.panelEscape?.();
+    this.panelEscape = undefined;
     this.panel?.remove();
     this.panel = undefined;
     try {
