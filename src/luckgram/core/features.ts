@@ -77,6 +77,11 @@ export const FEATURES: LuckgramFeature[] = [
   },
 
   {
+    key: 'quick_replies', group: 'messages', default: true,
+    title: ['快捷回复', 'Quick replies'],
+    description: ['把常用的回复存成模板，在输入框旁一点就填入', 'Keep the replies you use often as templates and insert them with one press by the message field']
+  },
+  {
     key: 'save_to_saved', group: 'messages', default: true,
     title: ['一键收藏', 'Save in one press'],
     description: ['消息菜单和多选栏里的「收藏」：直接存到「我的收藏」', '"Save" in a message\'s menu and in the selection\'s bar: straight to Saved Messages']

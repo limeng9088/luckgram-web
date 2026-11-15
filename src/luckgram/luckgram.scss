@@ -1931,3 +1931,260 @@ body.luckgram-ai-open {
   align-items: center;
   gap: .25rem;
 }
+
+// ---------------------------------------------------------------- W11b: quick replies (specs#190)
+
+// * the list over the message field
+.luckgram-replies-menu {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: calc(100% + .5rem);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  border-radius: .9375rem;
+  background: var(--surface-color);
+  color: var(--primary-text-color);
+  box-shadow: 0 2px 16px rgba(0, 0, 0, .22);
+  overflow: hidden;
+  font-size: .9375rem;
+
+  button {
+    font: inherit;
+  }
+
+  &-list {
+    // * 8 templates, then it scrolls
+    max-height: calc(var(--luckgram-replies-rows, 8) * 2.5rem);
+    overflow-y: auto;
+    padding: .25rem 0;
+  }
+
+  &-item {
+    display: block;
+    width: 100%;
+    height: 2.5rem;
+    padding: 0 .875rem;
+    border: none;
+    background: none;
+    color: inherit;
+    line-height: 2.5rem;
+    text-align: start;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+    user-select: none;
+    -webkit-touch-callout: none;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--light-secondary-text-color);
+    }
+  }
+
+  &-empty {
+    padding: .75rem .875rem;
+    color: var(--secondary-text-color);
+  }
+
+  &-footer {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .25rem .375rem .25rem .875rem;
+    border-top: 1px solid var(--border-color);
+  }
+
+  &-hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: .75rem;
+    line-height: 1rem;
+    color: var(--secondary-text-color);
+  }
+
+  &-manage {
+    flex: 0 0 auto;
+    padding: .375rem .625rem;
+    border: none;
+    border-radius: .5rem;
+    background: none;
+    color: var(--primary-color);
+    font-weight: var(--font-weight-bold, 500) !important;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--light-primary-color, rgba(0, 0, 0, .06));
+    }
+  }
+}
+
+// * the templates a "/…" asks for, in upstream's panel of suggestions
+.luckgram-replies-helper {
+  &-list {
+    max-height: calc(var(--luckgram-replies-rows, 8) * 2.5rem);
+    overflow-y: auto;
+    padding: .25rem 0;
+  }
+
+  &-item {
+    height: 2.5rem;
+    padding: 0 .875rem;
+    line-height: 2.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+
+    &:hover,
+    &.active {
+      background: var(--light-secondary-text-color);
+    }
+  }
+}
+
+// * "管理"
+.luckgram-replies-list {
+  padding: 0 .5rem;
+}
+
+.luckgram-replies-row {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  min-height: 3rem;
+  padding: .25rem .25rem .25rem .5rem;
+  border-radius: .625rem;
+  background: var(--surface-color);
+
+  &:hover {
+    background: var(--light-secondary-text-color);
+  }
+
+  &-handle {
+    flex: 0 0 auto;
+    padding: 0 .25rem;
+    color: var(--secondary-text-color);
+    cursor: grab;
+    user-select: none;
+  }
+
+  &-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    line-height: 1.25rem;
+  }
+
+  &-button {
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--secondary-text-color);
+    font: inherit;
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      background: var(--light-primary-color, rgba(0, 0, 0, .08));
+      color: var(--primary-color);
+    }
+
+    &.is-danger:hover {
+      color: var(--danger-color);
+    }
+
+    &:disabled {
+      opacity: .3;
+      cursor: default;
+    }
+  }
+}
+
+.luckgram-replies-add {
+  padding: .5rem;
+
+  &-button {
+    width: 100%;
+    height: 2.75rem;
+    border: 1px dashed var(--border-color);
+    border-radius: .625rem;
+    background: none;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: var(--font-weight-bold, 500);
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--primary-color);
+    }
+  }
+}
+
+.luckgram-replies-editor {
+  padding: .5rem 0;
+
+  &-field {
+    display: block;
+    width: 100%;
+    min-height: 4.5rem;
+    padding: .5rem .75rem;
+    border: 1px solid var(--primary-color);
+    border-radius: .625rem;
+    outline: none;
+    resize: vertical;
+    background: none;
+    color: var(--primary-text-color);
+    font: inherit;
+    line-height: 1.375rem;
+  }
+
+  &-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .25rem;
+    margin-top: .375rem;
+  }
+
+  &-counter {
+    margin-inline-end: auto;
+    font-size: .8125rem;
+    color: var(--secondary-text-color);
+
+    &.is-over {
+      color: var(--danger-color);
+    }
+  }
+
+  &-button {
+    padding: .375rem .875rem;
+    border: none;
+    border-radius: .5rem;
+    background: none;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: var(--font-weight-bold, 500);
+    cursor: pointer;
+
+    &.is-primary {
+      background: var(--primary-color);
+      color: #fff;
+    }
+
+    &:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+  }
+}

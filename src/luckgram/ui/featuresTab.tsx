@@ -82,6 +82,14 @@ export default function LuckgramFeaturesPage(): JSX.Element {
     tab.slider.createTab(LuckgramSubpageTab).open({feature});
   };
 
+  const openReplies = () => {
+    tab.slider.createTab(LuckgramSubpageTab).open({feature: {
+      key: 'quick_replies_manage', group: 'messages', default: true,
+      title: ['快捷回复', 'Quick replies'], description: ['', ''],
+      subpage: () => import('@/luckgram/replies/manageTab')
+    }});
+  };
+
   const openNotes = () => {
     tab.slider.createTab(LuckgramSubpageTab).open({feature: {
       key: 'user_notes_list', group: 'profiles', default: true,
@@ -123,6 +131,12 @@ export default function LuckgramFeaturesPage(): JSX.Element {
                 </Show>
                 <Show when={feature.key === 'dictation'}>
                   <DictationSettingsRows />
+                </Show>
+                <Show when={feature.key === 'quick_replies'}>
+                  <Row clickable={openReplies} class="luckgram-sub-row">
+                    <Row.Title>{lgText('管理', 'Manage')}</Row.Title>
+                    <Row.Subtitle>{lgText('新增、编辑、删除、排序', 'Add, edit, delete, put in order')}</Row.Subtitle>
+                  </Row>
                 </Show>
                 <Show when={feature.key === 'user_notes'}>
                   <Row clickable={openNotes} class="luckgram-sub-row">
