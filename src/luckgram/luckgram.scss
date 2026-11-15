@@ -1130,6 +1130,17 @@ body.luckgram-ai-open {
   }
 }
 
+// * a line over the field: what "问 AI" left out of a long content, until the text is edited or sent
+.luckgram-ai-field-notice {
+  margin: 0 .25rem .375rem;
+  font-size: .8125rem;
+  line-height: 1.25rem;
+  color: var(--secondary-text-color);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .luckgram-ai-input-row {
   display: flex;
   align-items: flex-end;

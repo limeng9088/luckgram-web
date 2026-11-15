@@ -10,7 +10,6 @@ import getMediaFromMessage from '@lib/appManagers/utils/messages/getMediaFromMes
 import {remoteNumber} from '@/luckgram/core/remoteConfig';
 import {DEFAULT_MAX_INPUT_CHARS, KEY_MAX_INPUT_CHARS, canReadFile, composeAsk, getAskCutText} from '@/luckgram/assistant/logic';
 import {openAssistant} from '@/luckgram/assistant/open';
-import {toast} from '@components/toast';
 import {lgText} from '@/luckgram/text';
 
 function getFileName(doc: Document.document): string | undefined {
@@ -41,10 +40,10 @@ export async function askAboutMessage(message: Message.message) {
   const page = await openAssistant();
   if(!page) return;
   const {text, cut} = composeAsk({text: message.message, links, fileName, fileContent}, remoteNumber(KEY_MAX_INPUT_CHARS, DEFAULT_MAX_INPUT_CHARS));
-  // * said in words: the "…" at the end alone does not tell that something was left out
+  // * said in words, in a line over the field: the "…" at the end alone does not tell that something was
+  // * left out. Not a toast — upstream's takes the next press anywhere, and the next press is on the field
   const notice = getAskCutText(cut);
-  if(notice) toast(lgText(...notice));
   // * what was typed there before stays, under what is brought
   const before = page.getInput();
-  page.setInput(text + before);
+  page.setInput(text + before, notice && lgText(...notice));
 }

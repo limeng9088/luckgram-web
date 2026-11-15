@@ -65,6 +65,7 @@ export default class AssistantPage {
   private quickEl: HTMLElement;
   private entriesEl: HTMLElement;
   private field: HTMLTextAreaElement;
+  private noticeEl: HTMLElement;
   private sendButton: HTMLButtonElement;
   private historyButton: HTMLButtonElement;
 
@@ -83,7 +84,7 @@ export default class AssistantPage {
     this.api = {
       getConversation: () => this.conversation,
       getInput: () => this.field.value,
-      setInput: (text) => this.setInput(text),
+      setInput: (text, notice) => this.setInput(text, notice),
       addMessage: (message) => this.addMessage(message).id,
       updateMessage: (id, patch) => this.updateMessage(id, patch),
       openConversation: (properties) => this.openConversation(properties),
@@ -144,7 +145,11 @@ export default class AssistantPage {
     this.field.dir = 'auto';
     this.field.placeholder = lgText('问点什么…', 'Ask anything…');
     this.field.setAttribute('aria-label', lgText('给 Luckgram AI 的消息', 'Message to Luckgram AI'));
-    this.field.addEventListener('input', () => this.onInput());
+    this.field.addEventListener('input', () => {
+      // * the text is the user's own from here on: what was said of what was brought goes
+      this.setNotice();
+      this.onInput();
+    });
     this.field.addEventListener('keydown', (e) => {
       // * as in a chat: Enter sends, Shift+Enter breaks the line; not while an input method is composing
       if(e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing && e.keyCode !== 229) {
@@ -155,7 +160,9 @@ export default class AssistantPage {
 
     this.sendButton = button('luckgram-ai-send', '', () => this.onSendButton());
     row.append(this.field, this.sendButton);
-    footer.append(this.quickEl, row);
+    this.noticeEl = el('div', 'luckgram-ai-field-notice hide');
+    this.noticeEl.setAttribute('role', 'status');
+    footer.append(this.quickEl, this.noticeEl, row);
 
     page.append(header, body, footer);
     this.renderExtensions();
@@ -193,7 +200,15 @@ export default class AssistantPage {
 
   // ------------------------------------------------------------------ the field
 
-  private setInput(text: string) {
+  /** The line over the field; nothing takes it away. */
+  private setNotice(text?: string) {
+    if(!this.noticeEl) return;
+    this.noticeEl.textContent = text || '';
+    this.noticeEl.classList.toggle('hide', !text);
+  }
+
+  private setInput(text: string, notice?: string) {
+    this.setNotice(notice);
     this.field.value = text;
     this.onInput();
     this.field.focus();
@@ -367,6 +382,7 @@ export default class AssistantPage {
   public send(text: string) {
     text = (text || '').trim();
     if(!text || this.busy) return;
+    this.setNotice();
 
     const intercepted = findInterceptor(getAssistantInterceptors(), text);
     if(intercepted) {
