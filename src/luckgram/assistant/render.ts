@@ -10,13 +10,16 @@ import parseEntities from '@lib/richTextProcessor/parseEntities';
 import wrapRichText from '@lib/richTextProcessor/wrapRichText';
 import type {MessageEntity} from '@layer';
 import {markdownToEntities} from '@/luckgram/assistant/logic';
+import {drawTables} from '@/luckgram/assistant/tables';
 
 export function renderMarkdown(markdown: string): DocumentFragment {
   try {
     const {text, entities: formatting} = markdownToEntities(markdown);
     // * links, mentions and the like that stand in the text as they are
     const entities = mergeEntities(formatting as MessageEntity[], parseEntities(text));
-    return wrapRichText(text, {entities});
+    const fragment = wrapRichText(text, {entities});
+    drawTables(fragment, text, formatting);
+    return fragment;
   } catch(err) {
     // * whatever the renderer chokes on is shown as it was written
     console.warn('[luckgram] assistant: a reply was not drawn as Markdown', (err as Error)?.message);

@@ -32,6 +32,7 @@ import {AiMenuItem, AiWritingHost, getAiMenuItems} from '@/luckgram/writing/regi
 import {registerAiWritingFeatures} from '@/luckgram/writing/features';
 import {NARROW_QUERY, isTranslateInAiMenu} from '@/luckgram/writing/narrow';
 import {holdEscape} from '@/luckgram/core/escape';
+import {trackOverField} from '@/luckgram/core/inputRoom';
 
 type Draft = {text: string, entities: TranslationEntity[]};
 
@@ -41,6 +42,8 @@ export default class LuckgramAiWriting {
   private panel: HTMLElement;
   private panelOnClose: () => void;
   private panelEscape: () => void;
+  private panelRoom: () => void;
+  private noticeRoom: () => void;
   private previous: Draft;
   private resultText: string;
   private peerId: PeerId;
@@ -191,8 +194,9 @@ export default class LuckgramAiWriting {
       const visible = !recording && (this.busy || this.getItems().length > 0 || this.getTranslateButtons().length > 0);
       this.button?.classList.toggle('hide', !visible);
 
-      // * the bar goes with the text it was about
-      if(this.notice && !this.busy && this.input.isInputEmpty()) this.forget();
+      // * the bar goes with the text it was about: once the field is empty, or the text was changed by
+      // * hand — "撤销" would throw away what was typed after the rewrite (Ctrl+Z is the editor's own then)
+      if(this.notice && !this.busy && (this.input.isInputEmpty() || this.getDraft().text !== this.resultText)) this.forget();
     } catch(err) {
       console.warn('[luckgram] ai writing: field', (err as Error)?.message);
     }
@@ -332,8 +336,15 @@ export default class LuckgramAiWriting {
 
   private forget() {
     this.previous = this.resultText = undefined;
+    this.noticeRoom?.();
+    this.noticeRoom = undefined;
     this.notice?.remove();
     this.notice = undefined;
+  }
+
+  /** Another bar takes the place (W5's "已翻译成 …"): there is one at a time. Nothing is given back. */
+  public dropNotice() {
+    this.forget();
   }
 
   private undo() {
@@ -343,7 +354,10 @@ export default class LuckgramAiWriting {
   }
 
   private showNotice(text: string) {
+    this.noticeRoom?.();
     this.notice?.remove();
+    // * one bar at a time: the translation's goes when this one comes
+    (this.input as any).luckgramTranslateOut?.reset();
     const notice = this.notice = document.createElement('div');
     notice.classList.add('luckgram-translate-bar', 'luckgram-ai-notice');
 
@@ -361,7 +375,10 @@ export default class LuckgramAiWriting {
     });
 
     notice.append(label, undo);
+    // * whatever bar is still over the field goes: there is never more than one
+    this.button?.parentElement?.parentElement?.querySelectorAll('.luckgram-translate-bar').forEach((bar) => bar.remove());
     this.insertOverField(notice);
+    this.noticeRoom = trackOverField(this.input as any, notice);
   }
 
   private insertOverField(element: HTMLElement) {
@@ -396,6 +413,8 @@ export default class LuckgramAiWriting {
     this.bindKeys();
     // * Esc closes the panel and nothing behind it (upstream would close the chat)
     this.panelEscape = holdEscape(() => this.hidePanel(), () => panel.isConnected);
+    // * the messages leave room for the panel: the last one stays in view, as with a reply's bar
+    this.panelRoom = trackOverField(this.input as any, panel);
   }
 
   private hidePanel() {
@@ -403,6 +422,8 @@ export default class LuckgramAiWriting {
     this.panelOnClose = undefined;
     this.panelEscape?.();
     this.panelEscape = undefined;
+    this.panelRoom?.();
+    this.panelRoom = undefined;
     this.panel?.remove();
     this.panel = undefined;
     try {

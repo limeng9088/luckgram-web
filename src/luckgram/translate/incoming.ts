@@ -5,7 +5,8 @@
  *  - the message menu's "翻译" / "撤销翻译" (contextMenu.ts asks here);
  *  - with `translate_in` on, an icon beside somebody else's message in a language that is not on
  *    the do-not-translate list: one tap does the same;
- *  - which messages show their translation is kept (cache.ts), so a reload shows them again.
+ *  - which messages show their translation is kept (cache.ts), so a reload shows them again;
+ *  - a voice message or a round video that was transcribed here is translated by its transcription.
  *
  * Upstream calls `decorateTranslatedBubble` as it draws a bubble; nothing else of the bubble's
  * code is touched. With the feature off or held back as a preview, upstream's own "Translate"
@@ -24,6 +25,7 @@ import {isFeatureEnabled} from '@/luckgram/core/features';
 import {useFeatureEnabled, useStringSetting} from '@/luckgram/core/hooks';
 import {lgText} from '@/luckgram/text';
 import {KEY_TRANSLATE_TO, TRANSLATE_IN, isOwnSender, shouldOfferQuickTranslate} from '@/luckgram/translate/logic';
+import {voiceKey} from '@/luckgram/voice/logic';
 import {
   detectTextLanguage, getIncomingTarget, getLanguageName, getTranslateAccount, getTranslateErrorText, translate, translationCache
 } from '@/luckgram/translate';
@@ -35,7 +37,19 @@ type Decorated = HTMLElement & {luckgramMessage?: Message.message, luckgramRun?:
 
 export const isIncomingTranslateOn = () => isFeatureEnabled(TRANSLATE_IN);
 
-const getText = (message: Message.message) => (message?._ === 'message' && message.message) || '';
+/**
+ * What of a message is translated: its text; for a voice message or a round video without one,
+ * the transcription it was given here (specs#186, W6 需求 4) — once there is one.
+ */
+function getTranscription(message: Message.message, bubble?: HTMLElement) {
+  if(message?._ !== 'message' || message.message) return '';
+  // * Luckgram's own; Telegram's (a Premium account) is only in the row that shows it
+  return translationCache.getText(voiceKey(getTranslateAccount(), message.peerId, message.mid)) ||
+    bubble?.querySelector('.audio-transcribed-text')?.textContent?.trim() || '';
+}
+
+const getText = (message: Message.message, bubble?: HTMLElement) =>
+  (message?._ === 'message' && message.message) || getTranscription(message, bubble);
 
 /**
  * Whether the message is the user's own. In Saved Messages a message has no `out` flag though it is
@@ -51,8 +65,8 @@ export function isMessageTranslated(message: Message.message) {
 }
 
 /** Whether the menu offers Luckgram's translation for this message (otherwise upstream's own item stays). */
-export function canTranslateInBubble(message: Message.message | undefined, isTextSelected?: boolean) {
-  return isIncomingTranslateOn() && !isTextSelected && !!getText(message) && message.media?._ !== 'messageMediaPoll';
+export function canTranslateInBubble(message: Message.message | undefined, isTextSelected?: boolean, bubble?: HTMLElement) {
+  return isIncomingTranslateOn() && !isTextSelected && !!getText(message, bubble) && message.media?._ !== 'messageMediaPoll';
 }
 
 export const getTranslateMenuText = (message: Message.message) => {
@@ -66,6 +80,20 @@ function getMessageDiv(bubble: HTMLElement) {
 function removeBlock(bubble: HTMLElement) {
   bubble.querySelectorAll('.' + BLOCK_CLASS).forEach((element) => element.remove());
   bubble.classList.remove('is-luckgram-translated');
+}
+
+/**
+ * The translation's place in the message: the last thing of it, before the time that floats at
+ * the end of the text. Nothing is moved when it is there already.
+ */
+function placeBlock(messageDiv: HTMLElement, block: HTMLElement) {
+  const time = [...messageDiv.children].find((element) => element.classList.contains('time'));
+  const next = block.parentElement === messageDiv ? block.nextElementSibling : undefined;
+  if(time) {
+    if(next !== time) messageDiv.insertBefore(block, time);
+  } else if(block.parentElement !== messageDiv || next) {
+    messageDiv.append(block);
+  }
 }
 
 function makeBlock(bubble: HTMLElement) {
@@ -85,10 +113,20 @@ function makeBlock(bubble: HTMLElement) {
   text.classList.add(BLOCK_CLASS + '-text');
   block.append(header, text);
 
-  // * before the time, which floats at the end of the text
-  const time = [...messageDiv.children].find((element) => element.classList.contains('time'));
-  if(time) messageDiv.insertBefore(block, time);
-  else messageDiv.append(block);
+  placeBlock(messageDiv, block);
+  // * what comes into the bubble later goes over the translation, not under it: a round video's
+  // * voice row and transcription are only put in when it is unfolded (specs#186: after a reload
+  // * the translation, drawn first, stood above them)
+  const observer = new MutationObserver(() => {
+    // * taken out: the translation undone, or another block made in its place
+    if(block.parentElement !== messageDiv) {
+      observer.disconnect();
+      return;
+    }
+
+    placeBlock(messageDiv, block);
+  });
+  observer.observe(messageDiv, {childList: true});
 
   bubble.classList.add('is-luckgram-translated');
   return {block, header, text};
@@ -99,12 +137,13 @@ async function showTranslation(bubble: Decorated, message: Message.message, toLa
   const parts = makeBlock(bubble);
   if(!parts) return;
 
-  const source = getText(message);
+  const source = getText(message, bubble);
   bubble.luckgramBusy = true;
   try {
     const translation = await translate({
       text: source,
-      entities: message.totalEntities as any,
+      // * a transcription has none: the message's entities are of its own text
+      entities: message.message ? message.totalEntities as any : undefined,
       toLang,
       peerId: message.peerId as any,
       mid: message.mid
@@ -160,7 +199,7 @@ function removeButton(bubble: HTMLElement) {
 }
 
 async function updateButton(bubble: Decorated, message: Message.message) {
-  const text = getText(message);
+  const text = getText(message, bubble);
   const [appSettings] = useAppSettings();
   // * nothing is looked at while the feature is off or held back
   if(!isIncomingTranslateOn()) {

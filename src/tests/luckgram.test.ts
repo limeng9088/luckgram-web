@@ -424,7 +424,7 @@ describe('luckgram: the HTML that is sent', () => {
 
 // ---- luckgram-specs#173: the language of the sign-in page
 import {getSignInLanguageOffer} from '@/luckgram/language';
-import {isLuckgramChinese, luckgramHtmlLang, luckgramPluralLocale, lgText, setLuckgramLangCode, LUCKGRAM_LANG_FOLLOWED_KEY} from '@/luckgram/text';
+import {chineseScriptOf, luckgramDeviceLocale, isLuckgramChinese, luckgramHtmlLang, luckgramPluralLocale, lgText, setLuckgramLangCode, LUCKGRAM_LANG_FOLLOWED_KEY} from '@/luckgram/text';
 
 describe('luckgram: the language on the sign-in page', () => {
   const browser = (language: string) => vi.spyOn(navigator, 'languages', 'get').mockReturnValue([language]);
@@ -495,6 +495,24 @@ describe('luckgram: the language on the sign-in page', () => {
   test('the document\'s lang is a language tag, in its canonical case', () => {
     expect(luckgramHtmlLang('zh-hans-raw')).toBe('zh-Hans');
     expect(luckgramHtmlLang('zh-hant-raw')).toBe('zh-Hant');
+
+    // * the script of a Chinese interface, for the server (transcriptions): specs#186
+    expect(chineseScriptOf('zh-hans-raw')).toBe('Hans');
+    expect(chineseScriptOf('zh-hant-raw')).toBe('Hant');
+    expect(chineseScriptOf('zh-TW')).toBe('Hant');
+    expect(chineseScriptOf('zh-HK')).toBe('Hant');
+    expect(chineseScriptOf('zh-CN')).toBe('Hans');
+    expect(chineseScriptOf('zh')).toBe('Hans');
+    expect(chineseScriptOf('en')).toBeUndefined();
+    expect(chineseScriptOf(undefined)).toBeUndefined();
+
+    // * the locale a device registers with
+    expect(luckgramDeviceLocale('zh-hans-raw', 'en-US')).toBe('zh-Hans');
+    expect(luckgramDeviceLocale('zh-hant-raw', 'en-US')).toBe('zh-Hant');
+    expect(luckgramDeviceLocale('zh', 'en-US')).toBe('zh-Hans');
+    expect(luckgramDeviceLocale('pt-br', 'en-US')).toBe('pt-BR');
+    expect(luckgramDeviceLocale('en', 'zh-TW')).toBe('zh-TW');
+    expect(luckgramDeviceLocale(undefined, undefined)).toBe('en');
     expect(luckgramHtmlLang('zh-hans')).toBe('zh-Hans');
     expect(luckgramHtmlLang('en')).toBe('en');
     expect(luckgramHtmlLang('pt-br')).toBe('pt-BR');
