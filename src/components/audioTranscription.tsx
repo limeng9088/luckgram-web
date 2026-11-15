@@ -15,6 +15,7 @@ import changeBubble from '@components/chat/changeBubble';
 
 // * Luckgram (W6): loaded when a voice row needs it — it brings the downloads and the AI client with it
 const loadLuckgramVoice = () => import('@/luckgram/voice/transcribe');
+import {bindRetryLine, installRetryLines} from '@/luckgram/voice/retryLine';
 
 
 /**
@@ -75,15 +76,12 @@ function TranscribedText(props: {id: string, state: TranscriptionState, onRetry?
         <Show when={props.state.luckgramFailed} fallback={i18n('Chat.Voice.Transribe.Error')}>
           {/* Luckgram (W6): what of a long recording was transcribed before a piece failed stays, the line after it */}
           <Show when={props.state.text}><span class="luckgram-transcribe-partial">{props.state.text}</span></Show>
-          {/* `on:click`: the span's own listener, not the document's — the press is the retry's whatever the bubble does with presses */}
+          {/* the press is heard by voice/retryLine.ts, before the toast that says the failure takes it */}
           <span
             class="luckgram-transcribe-retry"
             role="button"
             tabIndex={0}
-            on:click={(e: MouseEvent) => {
-              e.stopPropagation();
-              props.onRetry?.();
-            }}
+            ref={(line) => bindRetryLine(line, () => props.onRetry?.())}
           >{props.state.luckgramFailed}</span>
         </Show>
       </Show>
@@ -179,6 +177,8 @@ export default function createAudioTranscription(options: {
   listenerSetter: ListenerSetter,
   getRow: () => TranscribableRow
 }) {
+  // * Luckgram (W6): the retry line's press has to be listened for before a failure's toast is
+  installRetryLines();
   const [state, setState] = createStore<TranscriptionState>({
     status: 'idle',
     text: '',
