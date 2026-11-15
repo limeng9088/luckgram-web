@@ -1,4 +1,5 @@
 import rootScope from '@lib/rootScope';
+import {i18n} from '@lib/langPack';
 import confirmationPopup from '@components/confirmationPopup';
 import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
 import {getManagersSession, isSessionLeaving} from '@lib/accounts/getCurrentAccount';
@@ -27,7 +28,17 @@ async function readLogoutDescription(managers: AppManagers, userId: UserId) {
 export default async function showLogOutPopup() {
   const managers = bindManagersToSession(rootScope.managers);
   const userId = rootScope.myId.toUserId();
-  const description = await readLogoutDescription(managers, userId).catch((): DocumentFragment => undefined);
+  let description = await readLogoutDescription(managers, userId).catch((): DocumentFragment => undefined);
+  // * Luckgram (specs#192): the account's private notes go with it; said only when there are any
+  const notesLine = await import('@/luckgram/notes/logoutLine')
+  .then((module) => module.getLogoutNotesLine(rootScope.myId))
+  .catch((): string => undefined);
+  if(notesLine) {
+    const withNotes = document.createDocumentFragment();
+    withNotes.append(description ?? i18n('LogOut.Description'), document.createElement('br'), document.createElement('br'), notesLine);
+    description = withNotes;
+  }
+
   // * the account switched while the vault was read: this account's confirmation does not open over the next one
   if(isSessionLeaving(getManagersSession(managers))) return;
 

@@ -76,6 +76,18 @@ export const FEATURES: LuckgramFeature[] = [
     description: ['输入框旁的按钮：说话，转成文字插入光标处', 'A button by the message field: speak, and the words are inserted at the cursor']
   },
 
+  // ---- 资料 / Profiles
+  {
+    key: 'user_notes', group: 'profiles', default: true,
+    title: ['私人备注', 'Private notes'],
+    description: ['给任何人、群组或频道写一条只有您能看到的备注，只存在这台设备', 'A note on any person, group or channel that only you can see, kept on this device only']
+  },
+  {
+    key: 'profile_details', group: 'profiles', default: true,
+    title: ['资料详情', 'Profile details'],
+    description: ['资料里显示 ID（点击复制）和大致的注册时间', 'The ID (press to copy) and the approximate registration date in profiles']
+  },
+
   // ---- AI
   {
     key: 'ai_writing', group: 'ai', default: true,
