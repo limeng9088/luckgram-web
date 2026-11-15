@@ -26,6 +26,19 @@ const REGISTER_RETRY_MAX_MS = 24 * 60 * 60 * 1000;
  */
 export const CONNECT_TIMEOUT_MS = 10000;
 const APP_VERSION_HEADER = 'X-Luckgram-App-Version';
+/** One registration at a time among the tabs of the browser (Web Locks). */
+const REGISTER_LOCK = 'luckgram-device-register';
+
+type LockManagerLike = {request: <T>(name: string, callback: () => Promise<T>) => Promise<T>};
+
+/**
+ * Whether a stored value can be sent as the token: a string of the characters a bearer token is
+ * made of. Not the server's own format (`lgd2_…`): that may change, and a token the server gave
+ * must never be taken for a bad one. What fails here was not written by a registration.
+ */
+export function isUsableToken(value: any): value is string {
+  return typeof(value) === 'string' && /^[A-Za-z0-9._~+\/=-]{1,512}$/.test(value);
+}
 
 // * set by scripts/luckgram/vite-plugin.mjs: the entries of this build, the main one first
 const env = import.meta.env as any as Record<string, string | undefined>;
@@ -56,7 +69,9 @@ export type LuckgramApiOptions = {
   fetch?: typeof fetch,
   locale?: () => string,
   settings?: typeof LuckgramSettings,
-  now?: () => number
+  now?: () => number,
+  /** `navigator.locks` by default; null for none */
+  locks?: LockManagerLike | null
 };
 
 export class LuckgramApi {
@@ -91,7 +106,24 @@ export class LuckgramApi {
   }
 
   public get isRegistered() {
-    return !!this.settings.getPrivate(KEY_TOKEN);
+    return isUsableToken(this.settings.getPrivate(KEY_TOKEN));
+  }
+
+  /**
+   * The stored token, when it can be sent. A value that cannot (not a string, with a space or a
+   * line break in it) is dropped: sending it would only be refused, so it counts as no token.
+   */
+  private async getToken(): Promise<string | undefined> {
+    const value = this.settings.getPrivate<any>(KEY_TOKEN);
+    if(isUsableToken(value)) return value;
+    if(value !== undefined) await this.settings.setPrivate(KEY_TOKEN, undefined);
+  }
+
+  private getLocks(): LockManagerLike | undefined {
+    if(this.options.locks !== undefined) return this.options.locks || undefined;
+    try {
+      return typeof(navigator) !== 'undefined' && navigator.locks ? navigator.locks as any : undefined;
+    } catch(err) {}
   }
 
   // ------------------------------------------------------------------ transport
@@ -187,7 +219,23 @@ export class LuckgramApi {
   // ------------------------------------------------------------------ the device
 
   private register(signal?: AbortSignal): Promise<string> {
-    return this.registering ??= (async() => {
+    // * two tabs opened together would each register a device, and one of the two would be left
+    // * unused — out of a few registrations a day for an address. One tab registers; the others
+    // * wait for it and take its token
+    const locks = this.getLocks();
+    const run = async() => {
+      const stored = await this.settings.reloadPrivate?.(KEY_TOKEN);
+      if(isUsableToken(stored)) return stored;
+      return this.registerNow(signal);
+    };
+
+    return this.registering ??= (locks ? locks.request(REGISTER_LOCK, run) : run()).finally(() => {
+      this.registering = undefined;
+    });
+  }
+
+  private async registerNow(signal?: AbortSignal): Promise<string> {
+    {
       const retryAt = Number(this.settings.getPrivate(KEY_REGISTER_RETRY_AT)) || 0, now = this.now();
       if(retryAt > now && retryAt - now <= REGISTER_RETRY_MAX_MS) {
         const error = new LuckgramApiError(LuckgramApiError.RATE_LIMITED, 429);
@@ -214,20 +262,18 @@ export class LuckgramApi {
 
       const data = await response.json().catch((): any => undefined);
       const token: string = typeof(data?.token) === 'string' && data.token ? data.token : data?.device_token;
-      if(typeof(token) !== 'string' || !token) throw new LuckgramApiError(LuckgramApiError.UPSTREAM_UNAVAILABLE, response.status);
+      if(!isUsableToken(token)) throw new LuckgramApiError(LuckgramApiError.UPSTREAM_UNAVAILABLE, response.status);
 
       await this.settings.setPrivate(KEY_TOKEN, token);
       if(retryAt) await this.settings.setPrivate(KEY_REGISTER_RETRY_AT, undefined);
       return token;
-    })().finally(() => {
-      this.registering = undefined;
-    });
+    }
   }
 
   /** The device token, registering the browser first if it has none. */
   public async ensureRegistered(signal?: AbortSignal): Promise<void> {
     await this.settings.ready;
-    if(!this.settings.getPrivate(KEY_TOKEN)) await this.register(signal);
+    if(!await this.getToken()) await this.register(signal);
   }
 
   /** Forgets the device: the next request registers a new one. */
@@ -246,7 +292,7 @@ export class LuckgramApi {
 
     for(let attempt = 0; ; ++attempt) {
       await this.settings.ready;
-      const token = this.settings.getPrivate<string>(KEY_TOKEN) || await this.register(request.signal);
+      const token = await this.getToken() || await this.register(request.signal);
       const response = await this.send(request, token);
       if(response.status === 401 && attempt === 0) {
         // * unless another tab has registered again meanwhile, in which case its token is tried

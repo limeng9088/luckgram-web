@@ -10,7 +10,7 @@ import {
   REFRESH_INTERVAL_SECONDS, deserializeRemoteConfig, getRemoteBool, getRemoteNumber, getRemoteStrings, isFeatureAllowed,
   isRemoteConfigStale, parseRemoteConfig, serializeRemoteConfig
 } from '@/luckgram/core/remoteConfigLogic';
-import {LuckgramApi} from '@/luckgram/core/api';
+import {LuckgramApi, isUsableToken} from '@/luckgram/core/api';
 import {LuckgramApiError, errorFromResponse, errorMessage} from '@/luckgram/core/errors';
 import {LuckgramAI} from '@/luckgram/core/ai';
 import {createSseParser} from '@/luckgram/core/sse';
@@ -424,6 +424,57 @@ describe('luckgram API client', () => {
 
     await Promise.all([api.requestJSON({path: '/v1/me'}), api.requestJSON({path: '/v1/config'})]);
     expect(calls.filter((call) => call.url.endsWith('/v1/devices')).length).toBe(1);
+  });
+
+  test('two tabs opened together register one device between them', async() => {
+    // * one database, one lock manager: two tabs of a browser
+    const storage = new LuckgramMemoryStorage();
+    let tail: Promise<any> = Promise.resolve();
+    const locks = {request: <T>(_name: string, callback: () => Promise<T>) => {
+      const run = tail.then(callback);
+      tail = run.catch(() => {});
+      return run;
+    }};
+
+    let registered = 0;
+    const tokens: string[] = [];
+    const makeTab = async() => {
+      const settings = new LuckgramSettingsStore(storage, null);
+      await settings.ready;
+      const api = new LuckgramApi({endpoints: [MAIN], appVersion: '2.3', settings: settings as any, locks, fetch: (async(url: any, init: any) => {
+        if(String(url).endsWith('/v1/devices')) {
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return json(201, {token: 'tok-' + (++registered)});
+        }
+
+        tokens.push(init.headers['Authorization']);
+        return json(200, {ok: true});
+      }) as any});
+      return {api, settings};
+    };
+
+    const [a, b] = await Promise.all([makeTab(), makeTab()]);
+    await Promise.all([a.api.requestJSON({path: '/v1/config'}), b.api.requestJSON({path: '/v1/config'})]);
+    expect(registered).toBe(1);
+    expect(tokens).toEqual(['Bearer tok-1', 'Bearer tok-1']);
+    expect(b.settings.getPrivate('device_token')).toBe('tok-1');
+  });
+
+  test('a stored value that is no token is not sent: the browser registers again', async() => {
+    for(const bad of [{}, '', 'two words', 'line\nbreak', 42]) {
+      const {api, calls, settings} = await setup((call) =>
+        call.url.endsWith('/v1/devices') ? json(201, {token: 'tok-1'}) : json(200, {ok: true}));
+      await settings.setPrivate('device_token', bad);
+      expect(api.isRegistered).toBe(false);
+      await api.requestJSON({path: '/v1/config'});
+      expect(calls.map((call) => call.url.replace(MAIN, ''))).toEqual(['/v1/devices', '/v1/config']);
+      expect(header(calls[1], 'Authorization')).toBe('Bearer tok-1');
+      expect(settings.getPrivate('device_token')).toBe('tok-1');
+    }
+
+    // * the server's own format is not assumed: whatever token it gives is kept and sent
+    expect(isUsableToken('lgd2_' + 'A'.repeat(43))).toBe(true);
+    expect(isUsableToken('lgd9.new-format~x')).toBe(true);
   });
 
   describe('how long an answer may take', () => {
