@@ -158,5 +158,8 @@ function makeDefaultStorage(): LuckgramStorage {
   return typeof(indexedDB) !== 'undefined' ? new LuckgramIndexedDBStorage() : new LuckgramMemoryStorage();
 }
 
-const LuckgramSettings = new LuckgramSettingsStore(makeDefaultStorage());
+/** Luckgram's database of this origin: the settings', and whoever else keeps something there (the `cache` store). */
+export const luckgramStorage = makeDefaultStorage();
+
+const LuckgramSettings = new LuckgramSettingsStore(luckgramStorage);
 export default LuckgramSettings;

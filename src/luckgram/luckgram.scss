@@ -328,3 +328,160 @@ body.has-auth-pages {
   flex-direction: column;
   flex: 0 0 auto;
 }
+
+// ---------------------------------------------------------------- W5: translation (specs#185)
+
+// * a received message's translation, in its bubble under the original
+.luckgram-translation {
+  clear: both;
+  margin-top: .375rem;
+  padding-top: .375rem;
+  border-top: 1px solid rgba(var(--primary-text-color-rgb, 0, 0, 0), .12);
+  text-align: start;
+
+  &-header {
+    font-size: .75rem;
+    line-height: 1.25;
+    color: var(--secondary-text-color);
+    margin-bottom: .125rem;
+    user-select: none;
+  }
+
+  &-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  &.is-loading &-text {
+    min-height: 1em;
+    border-radius: .25rem;
+    background: rgba(var(--primary-text-color-rgb, 0, 0, 0), .06);
+    animation: luckgram-translation-loading 1.2s ease-in-out infinite;
+  }
+
+  .bubble.is-out & {
+    border-top-color: rgba(var(--message-out-primary-color-rgb, 0, 0, 0), .2);
+
+    &-header {
+      color: var(--message-out-primary-color, var(--secondary-text-color));
+    }
+  }
+}
+
+@keyframes luckgram-translation-loading {
+  50% {
+    opacity: .4;
+  }
+}
+
+// * the one-tap icon beside somebody else's message: on hover with a mouse, always on a touch screen.
+// * Only received messages have it, and they stand at the start side with room after them.
+//
+// * Where it stands, next to upstream's own buttons beside a bubble (forward, go to the original,
+// * comments, summary, transcription — all in the first column after the bubble, at its top or bottom):
+// *   - no button of upstream's: the first column, at the bubble's top;
+// *   - any button of upstream's: the second column, at the bottom — never over theirs, however short
+// *     the bubble is and wherever in their column they stand;
+// *   - upstream itself uses the second column's bottom (a lifted button beside the comments one): the third.
+.luckgram-translate-button {
+  --luckgram-beside-step: calc(var(--message-beside-button-size) + .25rem);
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: var(--message-beside-button-margin);
+  width: var(--message-beside-button-size);
+  height: var(--message-beside-button-size);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.375rem;
+  // * the theme's own surface and text colours: readable in the dark theme and over any wallpaper
+  color: var(--secondary-text-color);
+  background-color: var(--surface-color);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+  transition: opacity .15s;
+  z-index: 1;
+
+  .bubble-content:has(.bubble-beside-button, .summarize-container) > & {
+    inset-block: auto 0;
+    inset-inline-end: calc(var(--message-beside-button-margin) - var(--luckgram-beside-step));
+  }
+
+  .bubble.with-beside-replies .bubble-content:has(.bubble-beside-button--lifted) > & {
+    inset-inline-end: calc(var(--message-beside-button-margin) - var(--luckgram-beside-step) * 2);
+
+    // * no room for a third column in a narrow window: over the second, at the top
+    @media (max-width: 600px) {
+      inset-block: 0 auto;
+      inset-inline-end: calc(var(--message-beside-button-margin) - var(--luckgram-beside-step));
+    }
+  }
+
+  // * no room beside the bubble at all (incoming.ts measures it): a smaller one over the bubble's top
+  // * corner, half above it, where it covers no text. Whatever the rules above say.
+  .bubble-content > &.is-over-corner {
+    --message-beside-button-size: 1.75rem;
+    inset-block: -.875rem auto;
+    inset-inline-end: .5rem;
+    font-size: 1.125rem;
+  }
+
+  .bubble:hover &,
+  &.is-active,
+  html.is-touch &,
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    opacity: 1;
+  }
+
+  &.is-active {
+    color: #fff;
+    background-color: var(--primary-color);
+  }
+}
+
+// * the draft's translate button, left of the send button
+.luckgram-translate-out {
+  flex: 0 0 auto;
+
+  &.is-loading {
+    pointer-events: none;
+    animation: luckgram-translation-loading 1.2s ease-in-out infinite;
+  }
+}
+
+// * "已翻译成 西班牙语 · 撤销", over the message field
+.luckgram-translate-bar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .375rem 1rem;
+  font-size: .875rem;
+  line-height: 1.25rem;
+  color: var(--secondary-text-color);
+
+  &-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &-undo {
+    flex: 0 0 auto;
+    padding: 0 .25rem;
+    border: none;
+    background: none;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: var(--font-weight-bold, 500);
+    cursor: pointer;
+  }
+}

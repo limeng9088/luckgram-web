@@ -183,6 +183,7 @@ import reactionsEqual from '@appManagers/utils/reactions/reactionsEqual';
 import getMainGroupedMessage from '@appManagers/utils/messages/getMainGroupedMessage';
 import cancelClickOrNextIfNotClick from '@helpers/dom/cancelClickOrNextIfNotClick';
 import TranslatableMessage from '@components/translatableMessage';
+import {decorateTranslatedBubble} from '@/luckgram/translate/incoming';
 import getUnreadReactions from '@appManagers/utils/messages/getUnreadReactions';
 import isUnreadByReadCursor from '@appManagers/utils/messages/isUnreadByReadCursor';
 import {setPeerLanguageLoaded} from '@stores/peerLanguage';
@@ -10798,6 +10799,8 @@ export default class ChatBubbles {
     };
     middleware.onDestroy(() => disposeSummaryButton?.());
     if(isMessage) reconcileSummaryButton(message);
+    // * Luckgram (W5): the message's translation under its text, and the icon beside it
+    decorateTranslatedBubble(bubble, message);
 
     const replyMarkup = isMessage && message.reply_markup;
     // * a sender whose links are not drawn gets no buttons either (iOS)
