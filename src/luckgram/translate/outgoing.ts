@@ -29,12 +29,14 @@ import {
 import {detectTextLanguage, getLanguageName, getTranslateErrorText, translate} from '@/luckgram/translate';
 import {getLastIncomingText} from '@/luckgram/translate/incoming';
 import {isTranslateInAiMenu} from '@/luckgram/writing/narrow';
+import {trackOverField} from '@/luckgram/core/inputRoom';
 
 type Draft = {text: string, entities: TranslationEntity[]};
 
 export default class LuckgramTranslateOut {
   private button: HTMLElement;
   private bar: HTMLElement;
+  private barRoom: () => void;
   private original: Draft;
   private translatedText: string;
   private peerId: PeerId;
@@ -103,13 +105,16 @@ export default class LuckgramTranslateOut {
     const visible = this.isOn && !empty && !(this.input as any).recording && !isTranslateInAiMenu();
     this.button?.classList.toggle('hide', !visible);
 
-    // * the bar goes with the text it was about
-    if(this.bar && (empty || !this.isOn)) this.reset();
+    // * the bar goes with the text it was about: once the field is empty, or the text was changed by
+    // * hand — "撤销" would throw away what was typed after the translation
+    if(this.bar && !this.busy && (empty || !this.isOn || this.getDraft().text !== this.translatedText)) this.reset();
   }
 
   /** The message was sent, or another chat opened: nothing to give back. */
   public reset() {
     this.original = this.translatedText = undefined;
+    this.barRoom?.();
+    this.barRoom = undefined;
     this.bar?.remove();
     this.bar = undefined;
   }
@@ -171,7 +176,10 @@ export default class LuckgramTranslateOut {
   }
 
   private showBar(toLang: string, formattingLost: boolean) {
+    this.barRoom?.();
     this.bar?.remove();
+    // * one bar at a time: the rewrite's ("已润色 · 撤销") goes when this one comes
+    (this.input as any).luckgramAiWriting?.dropNotice?.();
     const bar = this.bar = document.createElement('div');
     bar.classList.add('luckgram-translate-bar');
 
@@ -192,7 +200,10 @@ export default class LuckgramTranslateOut {
 
     bar.append(text, undo);
     const row = this.button?.parentElement;
+    // * whatever bar is still over the field goes: there is never more than one
+    row?.parentElement?.querySelectorAll('.luckgram-translate-bar').forEach((other) => other.remove());
     if(row?.parentElement) row.parentElement.insertBefore(bar, row);
+    this.barRoom = trackOverField(this.input as any, bar);
   }
 
   // ------------------------------------------------------------------ the send button's menu
