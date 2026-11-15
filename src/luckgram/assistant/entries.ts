@@ -19,6 +19,7 @@ import {onAccountLeaving} from '@/luckgram/core/logout';
 import {lgText} from '@/luckgram/text';
 import {AI_ASSISTANT, KEY_PIN} from '@/luckgram/assistant/logic';
 import {takeStartedAtAssistant} from '@/luckgram/assistant/start';
+import {setAskAiHandler} from '@/luckgram/assistant/askHook';
 
 const open = () => import('@/luckgram/assistant/open').then((module) => module.openAssistant());
 
@@ -109,6 +110,16 @@ export function mountAssistantEntries(options: {
 
   // * this tab's account logs out: its conversations go with it, whether the page was ever opened or not
   onAccountLeaving((account) => import('@/luckgram/assistant/open').then((module) => module.deleteAssistantAccount(account)));
+
+  // * "问 AI" of a message's menu comes here (askHook.ts says why not directly)
+  setAskAiHandler((message) => import('@/luckgram/assistant/ask').then((module) => module.askAboutMessage(message)));
+
+  // * the extension points shown once each: a local development build that asks for it (lg_ai_demo=1)
+  if(import.meta.env.VITE_LG_CHANNEL !== 'prod') {
+    try {
+      if(localStorage.getItem('lg_ai_demo') === '1') import('@/luckgram/assistant/demo').then((module) => module.registerAssistantDemo());
+    } catch(err) {}
+  }
 
   startOnce();
 }

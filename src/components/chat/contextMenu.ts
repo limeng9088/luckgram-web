@@ -71,6 +71,9 @@ import {getRichQuoteSelection, makeRichQuoteOfSelection} from '@components/chat/
 import {listenRichMessageCopy} from '@components/chat/richMessageCopy';
 import detectLanguageForTranslation from '@helpers/detectLanguageForTranslation';
 import {canTranslateInBubble, getTranslateMenuText, toggleMessageTranslation} from '@/luckgram/translate/incoming';
+import {isFeatureEnabled} from '@/luckgram/core/features';
+import {lgText} from '@/luckgram/text';
+import {askAi, hasAskAiHandler} from '@/luckgram/assistant/askHook';
 import {getMessageSourceText} from '@stores/peerLanguage';
 import {showAdReport, showMessageReport} from '@components/popups/reportAd';
 import showAboutAdPopup from '@components/popups/aboutAd';
@@ -1289,6 +1292,16 @@ export default class ChatContextMenu {
       };
       return item;
     })(), {
+      // * Luckgram (W8): the message taken to the AI assistant's field, for a question to be added
+      icon: 'ai_filled',
+      regularText: lgText('问 AI', 'Ask AI'),
+      onClick: () => {
+        const message = this.message as Message.message;
+        askAi(message);
+      },
+      verify: () => !this.selectedMessages && hasAskAiHandler() && isFeatureEnabled('ai_assistant') && this.message?._ === 'message' &&
+        (!!this.message.message || this.message.media?._ === 'messageMediaDocument')
+    }, {
       icon: 'premium_translate',
       text: 'TranslateMessage',
       onClick: async() => {

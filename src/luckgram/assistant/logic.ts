@@ -345,3 +345,52 @@ export function markdownToEntities(markdown: string): {text: string, entities: M
   entities.sort((a, b) => a.offset - b.offset || b.length - a.length);
   return {text: text.replace(/\s+$/, ''), entities};
 }
+
+// ------------------------------------------------------------------ "问 AI": a message taken to the assistant (需求 5)
+
+/** A file is read into the question when it is text and no larger than this. */
+export const ASK_FILE_MAX_BYTES = 1024 * 1024;
+/** remote config: how long a request's text may be */
+export const KEY_MAX_INPUT_CHARS = 'ai.max_input_chars';
+/** the server's own default, until its config says otherwise */
+export const DEFAULT_MAX_INPUT_CHARS = 60000;
+
+const TEXT_EXTENSIONS = /\.(txt|md|markdown|csv|tsv|json|ya?ml|xml|html?|css|js|mjs|cjs|ts|tsx|jsx|py|rb|go|rs|java|kt|swift|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|sql|ini|toml|conf|cfg|log|tex|srt|vtt)$/i;
+const TEXT_TYPES = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|x-sh|sql|x-ndjson|toml)\b)/i;
+
+/** Whether a file is one whose content is text: by its type, else by its name. */
+export function isTextFile(mimeType: string | undefined, fileName: string | undefined): boolean {
+  return TEXT_TYPES.test(mimeType || '') || TEXT_EXTENSIONS.test(fileName || '');
+}
+
+export function canReadFile(mimeType: string | undefined, fileName: string | undefined, size: number | undefined): boolean {
+  return isTextFile(mimeType, fileName) && size > 0 && size <= ASK_FILE_MAX_BYTES;
+}
+
+/**
+ * What "问 AI" puts into the field: the message's text, the addresses of links that the text only
+ * names, the file's name and — for a text file — its content. Ends with an empty line: the user
+ * writes the question under it. Cut to what a request may carry, the file's content first.
+ */
+export function composeAskText(parts: {text?: string, links?: string[], fileName?: string, fileContent?: string}, maxChars = DEFAULT_MAX_INPUT_CHARS): string {
+  const text = (parts.text || '').trim();
+  const links = [...new Set((parts.links || []).filter((link) => link && !text.includes(link)))];
+  const blocks: string[] = [];
+  if(text) blocks.push(text);
+  if(links.length) blocks.push(links.join('\n'));
+
+  if(parts.fileName) {
+    let block = '[' + parts.fileName + ']';
+    const content = (parts.fileContent || '').replace(/\u0000/g, '').trim();
+    if(content) {
+      // * room for the rest and for the question itself
+      const room = maxChars - blocks.join('\n\n').length - block.length - 200;
+      if(room > 200) block += '\n' + (content.length > room ? content.slice(0, room) + '\n…' : content);
+    }
+
+    blocks.push(block);
+  }
+
+  const out = blocks.join('\n\n');
+  return out ? (out.length > maxChars ? out.slice(0, maxChars - 1) + '…' : out) + '\n\n' : '';
+}
