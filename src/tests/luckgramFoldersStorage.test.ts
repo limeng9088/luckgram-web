@@ -166,6 +166,34 @@ describe('luckgram keyword folders in the folder storage', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
+  test('a folder made on another device comes while the page is open: it stands before the keyword folders at once (specs#191)', () => {
+    const {storage, events, order, states} = makeStorage();
+    storage.luckgramSetKeywordFolders([INVOICES, WORK]);
+    events.length = states.length = 0;
+
+    // * `updateDialogFilter` of a folder this client did not have
+    storage.saveDialogFilter(cloudFilter(9), true);
+    expect(order()).toEqual([0, 1, 5, 7, 9, L, L + 1]);
+    // * the chat list hears of the new folder, then of the places — the keyword folders' tabs move after it
+    // * (as an update, which is how one made elsewhere arrives; the chat list makes its tab for either)
+    expect(names(events)).toEqual(['filter_update:9', `filter_order:0,1,5,7,9,${L},${L + 1}`]);
+    // * what upstream keeps of folders still never has a keyword folder
+    expect(states.flat().some(isLocalFolderId)).toBe(false);
+
+    // * a second one, and a change of one that is there: no reordering to tell of for the change
+    storage.saveDialogFilter(cloudFilter(11), true);
+    expect(order()).toEqual([0, 1, 5, 7, 9, 11, L, L + 1]);
+    events.length = 0;
+    storage.saveDialogFilter({...cloudFilter(9), title: {_: 'textWithEntities', text: 'renamed', entities: []}}, true);
+    expect(order()).toEqual([0, 1, 5, 7, 9, 11, L, L + 1]);
+    expect(names(events)).toEqual(['filter_update:9']);
+
+    // * without keyword folders nothing is said beyond upstream's own
+    const plain = makeStorage();
+    plain.storage.saveDialogFilter(cloudFilter(9), true);
+    expect(names(plain.events)).toEqual(['filter_update:9']);
+  });
+
   test('all folders cleared (the account leaving): the same list given again puts them back', () => {
     const {storage, order} = makeStorage();
     storage.luckgramSetKeywordFolders([INVOICES]);
