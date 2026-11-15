@@ -91,9 +91,23 @@ export function wrapRoundVideoBubble({
     }
   }
 
+  /**
+   * Where the round picture stands in the voice row, for the move between the two shapes. A video
+   * just sent has no picture drawn yet (Luckgram, specs#186: asking for its transcription then
+   * failed on the missing element): the row's own corner stands in for it, a square of its height.
+   */
+  function getThumbRect(): {left: number, top: number, width: number, height: number} {
+    const thumb = audioMessageContainer.querySelector('.audio-thumb');
+    if(thumb) return thumb.getBoundingClientRect();
+    const row = (audioMessageContainer.querySelector('.audio') || audioMessageContainer).getBoundingClientRect();
+    const size = Math.min(row.width, row.height, 54);
+    const isRtl = getComputedStyle(audioMessageContainer).direction === 'rtl';
+    return {left: isRtl ? row.right - size : row.left, top: row.top, width: size, height: size};
+  }
+
   async function hideAudio() {
     const coords = insideBubbleContainerCoords();
-    const initialThumbBcr = audioMessageContainer.querySelector('.audio-thumb')?.getBoundingClientRect();
+    const initialThumbBcr = getThumbRect();
     const initialThumbLeft = coords.x(initialThumbBcr.left + initialThumbBcr.width / 2);
     const initialThumbTop = coords.y(initialThumbBcr.top + initialThumbBcr.height / 2);
     const initialThumbSize = initialThumbBcr.width;
@@ -235,7 +249,7 @@ export function wrapRoundVideoBubble({
       const fill = async() => {
         try {
           const transcribeResult = byLuckgram ?
-            {text: await voice.transcribeMessage(message as Message.message)} :
+            {text: await voice.transcribeMessage(message as Message.message, bubble)} :
             await appMessagesManager.transcribeAudio(message, true);
           if(!transcribeResult.text) throw '';
           transcribedText.prepend(transcribeResult.text);
@@ -250,15 +264,24 @@ export function wrapRoundVideoBubble({
           const retry = document.createElement('span');
           retry.classList.add('luckgram-transcribe-retry');
           retry.setAttribute('role', 'button');
-          retry.textContent = voice.getVoiceRetryText();
+          // * what was transcribed before a piece failed stays, the line after it
+          const partialText: string = (err as any)?.partialText || '';
+          const partial = partialText ? document.createElement('span') : undefined;
+          if(partial) {
+            partial.classList.add('luckgram-transcribe-partial');
+            partial.textContent = partialText;
+          }
+
+          retry.textContent = voice.getVoiceRetryText(!!partial);
           retry.addEventListener('click', (e) => {
             e.stopPropagation();
             retry.remove();
+            partial?.remove();
             const again = new SpinnerElement();
             transcribe.append(again);
             fill().finally(() => again.remove());
           }, {once: true});
-          transcribedText.prepend(retry);
+          transcribedText.prepend(...(partial ? [partial, retry] : [retry]));
         }
       };
       await fill();
@@ -373,7 +396,7 @@ export function wrapRoundVideoBubble({
         ANIMATION_TIME,
         (progress) => {
           const coords = insideBubbleContainerCoords();
-          const targetBcr = audioMessageContainer.querySelector('.audio-thumb')?.getBoundingClientRect();
+          const targetBcr = getThumbRect();
           const targetLeft = coords.x(targetBcr.left + targetBcr.width / 2);
           const targetTop = coords.y(targetBcr.top + targetBcr.height / 2);
           const targetSize = targetBcr.width;
