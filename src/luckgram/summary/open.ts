@@ -11,6 +11,7 @@ import SummaryCard from '@/luckgram/summary/card';
 import {DEFAULT_MAX_INPUT_CHARS, KEY_MAX_INPUT_CHARS} from '@/luckgram/summary/logic';
 import SummarySession from '@/luckgram/summary/session';
 import {UnreadSnapshot, loadSummaryLines} from '@/luckgram/summary/telegram';
+import {renderMarkdown} from '@/luckgram/assistant/render';
 
 export function createSummaryCard(chat: Chat, unread: UnreadSnapshot | undefined, onClose: () => void) {
   const session = new SummarySession({
@@ -27,7 +28,9 @@ export function createSummaryCard(chat: Chat, unread: UnreadSnapshot | undefined
       card.fold();
       chat.setMessageId({lastMsgId: messageId});
     },
-    onClose
+    onClose,
+    // * an answer's Markdown, drawn as the assistant's page draws it
+    renderMarkdown
   });
 
   return card;
