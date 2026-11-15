@@ -2030,6 +2030,11 @@ body.luckgram-ai-open {
   }
 
   &-item {
+    // * in a bot's list of commands, the first template: a line between the commands and the templates
+    &.is-after-commands {
+      border-top: 1px solid var(--border-color);
+    }
+
     height: 2.5rem;
     padding: 0 .875rem;
     line-height: 2.5rem;
