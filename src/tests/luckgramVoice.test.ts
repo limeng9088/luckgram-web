@@ -1,3 +1,4 @@
+import {vi} from 'vitest';
 // * Luckgram Web (luckgram-specs#186, W6): free transcription — what is sent, in how many pieces
 
 import {
@@ -162,6 +163,42 @@ describe('luckgram voice: what is sent', () => {
     const whole = make([{error: 'timeout'}, '整条']);
     expect(await transcribeInPieces(blob, {...base, durationSeconds: 28, send: whole.send})).toBe('整条');
     expect(whole.asked.length).toBe(2);
+  });
+
+  test('a message drawn while it was being sent is transcribed as the server has it (specs#186)', async() => {
+    const {waitForSentMessage} = await import('@/luckgram/voice/sent');
+    const isTempId = (mid: number) => !Number.isInteger(mid);
+    const local = {mid: 100.5, peerId: 7, pFlags: {is_outgoing: true as const}};
+    const sent = {mid: 101, peerId: 7, pFlags: {}};
+    const noEvents = () => () => {};
+
+    // * a message that was received, or sent long ago: itself, nothing is asked
+    const asked = vi.fn();
+    expect(await waitForSentMessage({message: sent, isTempId, getBubbleMid: asked, getMessage: asked, subscribe: asked, timeoutMs: 10})).toBe(sent);
+    expect(asked).not.toHaveBeenCalled();
+
+    // * already sent, the bubble has its new id: the stored message of that id
+    expect(await waitForSentMessage({
+      message: local, isTempId, getBubbleMid: () => 101, getMessage: async(mid) => mid === 101 ? sent : undefined, subscribe: noEvents, timeoutMs: 10
+    })).toBe(sent);
+
+    // * still on its way: waited for, and only its own "sent" counts
+    let emit: (tempId: number, message: any) => void, stopped = false;
+    const waiting = waitForSentMessage({
+      message: local, isTempId, getBubbleMid: () => 100.5, getMessage: async(): Promise<typeof sent> => undefined, timeoutMs: 5000,
+      subscribe: (listener) => (emit = listener, () => stopped = true)
+    });
+    await Promise.resolve();
+    emit(55.5, {mid: 56, peerId: 7, pFlags: {}});
+    emit(100.5, {mid: 101, peerId: 8, pFlags: {}});
+    emit(100.5, sent);
+    expect(await waiting).toBe(sent);
+    expect(stopped).toBe(true);
+
+    // * never sent: given up, with nothing
+    expect(await waitForSentMessage({
+      message: local, isTempId, getBubbleMid: () => 100.5, getMessage: async(): Promise<typeof sent> => undefined, subscribe: noEvents, timeoutMs: 20
+    })).toBeUndefined();
   });
 
   test('pieces of about two minutes, each under the limit, covering every sample once', () => {

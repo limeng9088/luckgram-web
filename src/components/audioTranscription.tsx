@@ -196,7 +196,7 @@ export default function createAudioTranscription(options: {
     if(state.status === 'transcribed') setState({pending: true, error: false, luckgramFailed: undefined, text: state.luckgramFailed ? state.text : '', expanded: true});
     else setState('status', 'loading');
 
-    loadLuckgramVoice().then((voice) => voice.transcribeMessage(message).then((text) => {
+    loadLuckgramVoice().then((voice) => voice.transcribeMessage(message, options.getRow()).then((text) => {
       changeBubble(options.getRow(), () => setState((prev) => ({...reduceTranscribed(prev, {text}), luckgramFailed: undefined})));
     }, (err) => {
       toast(voice.getVoiceErrorText(err));

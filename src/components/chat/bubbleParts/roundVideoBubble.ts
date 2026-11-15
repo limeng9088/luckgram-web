@@ -249,7 +249,7 @@ export function wrapRoundVideoBubble({
       const fill = async() => {
         try {
           const transcribeResult = byLuckgram ?
-            {text: await voice.transcribeMessage(message as Message.message)} :
+            {text: await voice.transcribeMessage(message as Message.message, bubble)} :
             await appMessagesManager.transcribeAudio(message, true);
           if(!transcribeResult.text) throw '';
           transcribedText.prepend(transcribeResult.text);

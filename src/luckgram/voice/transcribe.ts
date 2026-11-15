@@ -13,6 +13,8 @@
 
 import type {Document, Message} from '@layer';
 import rootScope from '@lib/rootScope';
+import {bindManagersToSession} from '@lib/accounts/bindManagersToAccount';
+import {isTempId} from '@lib/appManagers/utils/messages/isTempId';
 import getMediaFromMessage from '@lib/appManagers/utils/messages/getMediaFromMessage';
 import appDownloadManager from '@lib/appDownloadManager';
 import {isFeatureEnabled} from '@/luckgram/core/features';
@@ -26,6 +28,7 @@ import {
   DEFAULT_MAX_MB, FREE_TRANSCRIBE, KEY_MAX_MB, VoiceFailure, getMaxBytes, getVoiceFailure, getVoiceFailureText, voiceKey
 } from '@/luckgram/voice/logic';
 import {PartialTranscription, PieceResult, PiecesDone, transcribeInPieces} from '@/luckgram/voice/pieces';
+import {waitForSentMessage} from '@/luckgram/voice/sent';
 
 export class VoiceError extends Error {
   /** what was transcribed before a piece failed: shown, and kept to go on from */
@@ -92,11 +95,54 @@ export async function getCachedTranscriptionWhenReady(message: Message.message):
   return getCachedTranscription(message);
 }
 
+/** How long a message that is being sent is waited for before its transcription is given up. */
+const SENDING_TIMEOUT_MS = 120000;
+
+/**
+ * The message as the server has it. A bubble drawn while its message was being sent may still
+ * hold what it was drawn from — a local message with a temporary id, whose file the server does
+ * not know — and nothing can be downloaded by that: asked for a transcription a moment after a
+ * round video was sent, it failed at once. The bubble is given the new id when the message is
+ * sent (bubbles.ts), so `element` says where the message is now; one still on its way is waited for.
+ */
+export function resolveSentMessage(message: Message.message, element?: HTMLElement, timeoutMs = SENDING_TIMEOUT_MS): Promise<Message.message> {
+  const managers = bindManagersToSession(rootScope.managers);
+  return waitForSentMessage<Message.message>({
+    message,
+    isTempId,
+    timeoutMs,
+    getBubbleMid: () => Number(element?.closest<HTMLElement>('[data-mid]')?.dataset.mid) || undefined,
+    getMessage: async(mid) => {
+      const sent = await managers.appMessagesManager.getMessageByPeer(message.peerId, mid) as Message.message;
+      return sent?._ === 'message' ? sent : undefined;
+    },
+    subscribe: (listener) => {
+      const onSent = (e: {tempId: number, message: any}) => listener(e.tempId, e.message);
+      rootScope.addEventListener('message_sent', onSent);
+      return () => rootScope.removeEventListener('message_sent', onSent);
+    }
+  }).then((sent) => {
+    if(!sent) throw new VoiceError('other');
+    return sent;
+  });
+}
+
 /**
  * The message's voice or round video as text.
+ * @param element the message's bubble or something in it: where a message drawn while it was sent is now
  * @throws VoiceError, whose `failure` says what to tell the user
  */
-export function transcribeMessage(message: Message.message): Promise<string> {
+export async function transcribeMessage(message: Message.message, element?: HTMLElement): Promise<string> {
+  try {
+    message = await resolveSentMessage(message, element);
+  } catch(err) {
+    throw toVoiceError(err);
+  }
+
+  return transcribeSentMessage(message);
+}
+
+function transcribeSentMessage(message: Message.message): Promise<string> {
   const key = voiceKey(getTranslateAccount(), message.peerId, message.mid);
   let promise = inFlight.get(key);
   if(promise) return promise;
