@@ -740,6 +740,29 @@ body.luckgram-ai-open #column-center > .chats-container {
   visibility: hidden;
 }
 
+// * with no chat open, upstream shows its tips in the middle column, and their round button in the page's
+// * top corner (components/chatTips: fixed, portalled to the page, `z-index: 3`) — which lay over the
+// * header's "新对话". Neither belongs to the assistant's page: both are out of sight while it is open
+body.luckgram-ai-open {
+  .chat-tips-mount > * {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  // * the portal's box, a child of the page; the button has no class that outlives a build
+  .page-chats > div > button[aria-controls][aria-expanded] {
+    display: none !important;
+  }
+}
+
+// * should that button be there all the same (another build of upstream's portal), the header's own
+// * buttons stand clear of it: its 2.5rem and the gap, where the page reaches the window's edge
+@media only screen and (min-width: 926px) {
+  body.luckgram-ai-open:not(.has-chat):not(.is-right-column-shown) .luckgram-ai-header {
+    padding-inline-end: 4rem;
+  }
+}
+
 .luckgram-ai-header {
   flex: 0 0 auto;
   display: flex;
