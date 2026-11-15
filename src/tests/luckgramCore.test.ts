@@ -759,6 +759,44 @@ describe('luckgram AI client', () => {
     }
   });
 
+  test('"停止" while an answer is being written ends it: the request and the reading (specs#188)', async() => {
+    const settings = new LuckgramSettingsStore(new LuckgramMemoryStorage(), null);
+    await settings.ready;
+    await settings.set('ai_consent', true);
+    await settings.setPrivate('device_token', 'tok');
+
+    // * a server that keeps writing: a piece now, the next ones for as long as it is let
+    let requestSignal: AbortSignal, push: (text: string) => void;
+    const encoder = new TextEncoder();
+    const api = new LuckgramApi({endpoints: [MAIN], appVersion: '2.3', settings: settings as any, fetch: (async(_url: any, init: any) => {
+      requestSignal = init.signal;
+      return new Response(new ReadableStream({
+        start(controller) {
+          push = (text) => controller.enqueue(encoder.encode('data: ' + JSON.stringify({delta: text}) + '\n\n'));
+          push('一');
+        }
+      }), {status: 200, headers: {'Content-Type': 'text/event-stream'}});
+    }) as any});
+    const ai = new LuckgramAI({api, askConsent: async() => true, settings: settings as any});
+
+    const abort = new AbortController();
+    const seen: string[] = [];
+    const answer = ai.chat({messages: [{role: 'user', content: 'hello'}], signal: abort.signal, onDelta: (_delta, text) => seen.push(text)}).catch((err) => err);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(seen).toEqual(['一']);
+    expect(requestSignal.aborted).toBe(false);
+
+    abort.abort();
+    expect(await answer).toMatchObject({code: 'cancelled'});
+    // * the request itself is given up (the server stops being paid attention to), and what it still writes is not shown
+    expect(requestSignal.aborted).toBe(true);
+    try {
+      push('二');
+    } catch(err) {}
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(seen).toEqual(['一']);
+  });
+
   test('the quota is asked without consent: nothing of the user\'s is sent', async() => {
     const {ai, askConsent} = await setup(false, () => new Response('{}'));
     expect(await ai.me()).toEqual({tier: 'free'});
