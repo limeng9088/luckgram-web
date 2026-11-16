@@ -5,6 +5,7 @@
  * https://github.com/zhukov/webogram/blob/master/LICENSE
  */
 
+import {LOCAL_FOLDER_ERROR, guardFolderRequest} from '@/luckgram/folders/guard';
 import type {UserAuth} from '@appManagers/constants';
 import type {DcAuthKey, DcId, DcServerSalt, InvokeApiOptions, TrueDcId} from '@types';
 import type {MethodDeclMap} from '@layer';
@@ -695,6 +696,19 @@ export class ApiManager extends ApiManagerMethods {
 
   public invokeApi<T extends keyof MethodDeclMap>(method: T, params: MethodDeclMap[T]['req'] = {}, options: InvokeApiOptions = {}): CancellablePromise<MethodDeclMap[T]['res']> {
     // /////this.log('Invoke api', method, params, options);
+
+    // * Luckgram (specs#191): the last line before Telegram — no request carries a keyword folder's id.
+    // * An order of folders goes without such ids; a request about one such folder is not sent
+    const luckgramGuard = guardFolderRequest(method, params);
+    if(luckgramGuard.action === 'strip') {
+      this.log.warn('[luckgram] keyword folders: local ids left out of', method, luckgramGuard.removed);
+      params = luckgramGuard.params;
+    } else if(luckgramGuard.action === 'block') {
+      this.log.warn('[luckgram] keyword folders: not sent,', method, 'names a local folder', luckgramGuard.id);
+      const refused = deferredPromise<MethodDeclMap[T]['res']>();
+      refused.reject(makeError(LOCAL_FOLDER_ERROR as any));
+      return refused;
+    }
 
     /* if(!this.lol) {
       networkerFactory.updatesProcessor({_: 'new_session_created'}, true);

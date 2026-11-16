@@ -15,6 +15,8 @@ import Sortable from '@helpers/dom/sortable';
 import whichChild from '@helpers/dom/whichChild';
 import indexOfAndSplice from '@helpers/array/indexOfAndSplice';
 import showLimitPopup from '@components/popups/limit';
+import {isLocalFolderId} from '@/luckgram/folders/guard';
+import LuckgramKeywordFoldersSection from '@/luckgram/folders/section';
 import {joinDeepPath} from '@helpers/object/setDeepProperty';
 import wrapFolderTitle from '@components/wrappers/folderTitle';
 import useHasFoldersSidebar from '@stores/foldersSidebar';
@@ -330,6 +332,8 @@ const ChatFolders: Component = () => {
     loadPromises.push(renderFiltersPromise);
 
     tab.listenerSetter.add(rootScope)('filter_update', async(filter) => {
+      // * Luckgram (specs#191): keyword folders have a list of their own under this one, whose order is Telegram's
+      if(isLocalFolderId(filter.id)) return;
       const filterRendered = filtersRendered[filter.id];
       if(filterRendered) {
         await renderFolder(filter, null, filterRendered);
@@ -427,6 +431,8 @@ const ChatFolders: Component = () => {
       <Section name="Filters" classList={{hide: foldersHidden()}}>
         <div ref={list} />
       </Section>
+      {/* Luckgram (specs#191): folders of this device, made of keywords; never mixed with the list above */}
+      <LuckgramKeywordFoldersSection />
       <Section
         name="FilterRecommended"
         classList={{hide: suggestedHidden()}}
