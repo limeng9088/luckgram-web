@@ -268,6 +268,20 @@ describe('luckgram keyword folders: the chats one holds', () => {
     expect(storage.testDialogForFilter(dialog(10, 1), storage.filters[L + 1])).toBe(true);
   });
 
+  test('the messages "跳到下一个" goes through: those kept here that have a keyword, the latest first', () => {
+    const {storage, say, histories} = makeStorage();
+    storage.luckgramSetKeywordFolders([INVOICES]);
+    storage.appMessagesManager.getDialogOnly = () => ({top_message: 9});
+    say(11, 9, 'hello');
+    say(11, 8, 'Your invoice is ready');
+    say(11, 7, '好的');
+    say(11, 6, '发票已开');
+    histories.set(11, [9, 8, 7, 6]);
+    expect(storage.luckgramGetKeywordMessages(L, 11)).toEqual([{mid: 8, keyword: 'invoice'}, {mid: 6, keyword: '发票'}]);
+    expect(storage.luckgramGetKeywordMessages(L + 9, 11)).toEqual([]);
+    expect(storage.luckgramGetKeywordMessages(5, 11)).toEqual([]);
+  });
+
   test('the set alone: what it is asked with is all it knows of a chat', () => {
     const set = new KeywordFolderSet();
     set.set([INVOICES]);

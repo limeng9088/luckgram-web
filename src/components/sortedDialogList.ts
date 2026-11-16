@@ -276,6 +276,12 @@ export default class SortedDialogList {
 
     await Promise.all(loadPromises);
 
+    // * Luckgram (specs#191): a row's preview is first drawn before the row is in its list, when nothing says
+    // * yet which folder it is of — the keywords of a keyword folder are marked here, the list being known
+    try {
+      this.appDialogsManager.luckgramMarkPreview?.(dialogElement, Number(this.list?.closest<HTMLElement>('[data-filter-id]')?.dataset.filterId));
+    } catch(err) {}
+
     return {
       type: 'dialog',
       value: dialogElement

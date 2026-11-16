@@ -2435,3 +2435,71 @@ body.luckgram-ai-open {
 .luckgram-folder-new .row-title {
   color: var(--primary-color);
 }
+
+// ---------------------------------------------------------------- W12b: keywords found (specs#191)
+
+// * a keyword in a chat's preview, in a keyword folder
+.luckgram-keyword-hit {
+  padding: 0 .125rem;
+  border-radius: .25rem;
+  background: var(--light-primary-color, rgba(51, 144, 236, .18));
+  color: var(--primary-color);
+
+  // * the chat that is open: its row is primary-coloured itself. The row's own class — the list's page
+  // * and tab above it carry `active` too, and with `.active` alone every row took this look
+  .chatlist-chat.active & {
+    background: rgba(255, 255, 255, .25);
+    color: inherit;
+  }
+}
+
+// * the bar over the message field of a chat opened from a keyword folder
+.luckgram-keyword-jump {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto .375rem;
+  padding: .125rem .25rem .125rem .25rem;
+  border-radius: 1.125rem;
+  background: var(--surface-color);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, .16);
+  font-size: .875rem;
+
+  &-button {
+    min-width: 0;
+    padding: .375rem .75rem;
+    border: none;
+    border-radius: 1rem;
+    background: none;
+    color: var(--primary-color);
+    font: inherit;
+    font-weight: var(--font-weight-bold, 500);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--light-primary-color, rgba(0, 0, 0, .06));
+    }
+  }
+
+  &-close {
+    flex: 0 0 auto;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--secondary-text-color);
+    font: inherit;
+    font-size: .75rem;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--light-secondary-text-color);
+    }
+  }
+}

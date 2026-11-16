@@ -119,6 +119,20 @@ export class KeywordFolderSet {
     return this.found.get(id)?.get(peerId)?.hit;
   }
 
+  /** Every one of the messages (the latest first) that has a keyword of the folder, with the keyword. */
+  public findMessages(id: number, messages: {mid: number, text: string | undefined}[]): {mid: number, keyword: string}[] {
+    const folder = this.get(id);
+    if(!folder) return [];
+    const matcher = this.getMatcher(folder);
+    const out: {mid: number, keyword: string}[] = [];
+    for(const message of messages) {
+      const keyword = matcher.find(message.text);
+      if(keyword) out.push({mid: message.mid, keyword});
+    }
+
+    return out;
+  }
+
   /** A chat is gone, or its messages changed without a new one coming (an edit, a deletion). */
   public forget(peerId: number) {
     for(const found of this.found.values()) found.delete(peerId);

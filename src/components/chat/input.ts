@@ -15,6 +15,7 @@ import LuckgramTranslateOut from '@/luckgram/translate/outgoing';
 import LuckgramDictation from '@/luckgram/voice/dictation';
 import LuckgramAiWriting from '@/luckgram/writing/controller';
 import LuckgramQuickReplies from '@/luckgram/replies/controller';
+import LuckgramKeywordJump from '@/luckgram/folders/jumpBar';
 import type {ComposeMessageWithAiResult} from '@appManagers/aiTonesManager';
 import AiSendSparkles from '@components/chat/aiSendSparkles';
 import AiRewriteEffect from '@components/chat/aiRewriteEffect';
@@ -452,6 +453,8 @@ export default class ChatInput {
   private luckgramExtraHeight = 0;
   // * Luckgram (W11): templates put into the field with one press; "/…" finds them
   public luckgramQuickReplies: LuckgramQuickReplies;
+  // * Luckgram (W12): a chat opened from a keyword folder goes from one message with a keyword to the next
+  public luckgramKeywordJump: LuckgramKeywordJump;
   /** layer 229: a bot is streaming text into this chat/topic and lets us stop it */
   private streamStoppable = false;
   private sendBtnIcon: ChatSendBtnIcon;
@@ -5170,6 +5173,7 @@ export default class ChatInput {
     this.luckgramDictation?.update();
     this.luckgramAiWriting?.update();
     this.luckgramQuickReplies?.update();
+    (this.luckgramKeywordJump ??= new LuckgramKeywordJump(this)).update();
     let icon: ChatSendBtnIcon;
 
     const isInputEmpty = this.isInputEmpty();
